@@ -1,45 +1,57 @@
 {
-  "name": "the-arcanecrate",
+  "name": "soundbox",
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "main": "dist-electron/electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && tsc -p tsconfig.electron.json",
     "preview": "vite preview",
     "lint": "eslint .",
-    "tauri": "tauri"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "electron:build": "tsc -p tsconfig.electron.json",
+    "electron:start": "npm run electron:build && electron ./dist-electron/electron/main.js",
+    "electron:dev": "concurrently -k \"npm:dev\" \"npm:electron:wait\"",
+    "electron:wait": "wait-on http://localhost:1420 && npm run electron:build && cross-env VITE_DEV_SERVER_URL=http://localhost:1420 electron ./dist-electron/electron/main.js"
   },
   "dependencies": {
     "@babel/core": "^7.29.0",
     "@radix-ui/react-slot": "^1.2.4",
-    "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/plugin-dialog": "^2",
-    "@tauri-apps/plugin-fs": "^2",
-    "@tauri-apps/plugin-shell": "^2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.469.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-window": "^2.2.7",
     "tailwind-merge": "^3.0.2",
-    "wavesurfer.js": "^7.9.4"
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@tailwindcss/vite": "^4",
-    "@tauri-apps/cli": "^2.10.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^24.12.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/react-window": "^1.8.8",
     "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^37.3.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^15.15.0",
+    "jsdom": "^29.0.1",
     "tailwindcss": "^4",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.0",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^4.1.2",
+    "wait-on": "^8.0.5"
   }
 }

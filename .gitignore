@@ -3,7 +3,11 @@ node_modules/
 
 # Build output
 dist/
+dist-electron/
 src-tauri/target/
+
+# ffmpeg binaries (download separately)
+ffmpeg-8.1-essentials_build/
 
 # IDE
 .vscode/

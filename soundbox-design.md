@@ -1,8 +1,8 @@
-# The Arcane Crate - 音频素材管理工具 设计文档
+# Soundbox - 音频素材管理工具 设计文档
 
-> 版本：v1.2  
-> 日期：2026-04-01  
-> 状态：开发中
+> 版本：v1.0
+> 日期：2026-05-13
+> 状态：✅ 正式发布（核心功能完备，持续迭代中）
 
 ---
 
@@ -10,81 +10,68 @@
 
 ### 背景与定位
 
-**The Arcane Crate** 是一款面向视频后期制作人员的音频素材管理工具。核心目标是解决素材量大、重复文件多、缺乏标签管理导致的查找与复用困难问题，提供波形可视化、标签分类、快速预览、去重识别、团队协作标签共享等能力，并提供 Adobe Premiere Pro 插件作为快捷调用入口。
+**Soundbox** 是一款面向视频后期制作人员的桌面端音频素材管理工具。核心目标是解决素材量大、重复文件多、缺乏标签管理导致的查找与复用困难问题，提供波形可视化、标签分类、快速预览、去重识别等能力。
 
 ### 目标用户
 
 - 视频剪辑师 / 后期制作人员
 - 需要管理大量 BGM、音效、环境音素材
-- 素材库路径因人而异，但团队成员之间存在大量重复音频内容
-- 需要在本地高性能操作，同时保留后续 NAS 协作能力
+- 素材库路径因人而异，但存在大量重复音频内容
+- 需要在本地高性能操作
 
 ### 核心痛点
 
 | 痛点 | 描述 |
 |------|------|
 | 素材量大，难以区分 | 相同文件名但不同情绪/能量的音乐难以区分 |
-| 重复素材多 | 同一首音频可能散落在多个目录、多个项目包中 |
+| 重复素材多 | 同一首音频可能散落在多个目录中 |
 | 预览效率低 | 需要打开外部播放器才能试听 |
-| 缺乏统一标签 | 标签若绑定路径，会导致重复劳动和标签割裂 |
-| 团队协作困难 | 团队成员素材库路径不同，但希望共享标签结果 |
-| 工作流割裂 | 在 Premiere Pro 中剪辑时仍需切换外部工具 |
+| 缺乏统一标签 | 标签若绑定路径，会导致重复劳动 |
+| 查找困难 | 只能靠文件夹名和文件名记忆，无法按情绪/能量筛选 |
+
+### 开发说明
+
+> ⚠️ **本项目由单人使用 AI 辅助（vibe coding）开发，开发者无编程能力。**
+> **设计文档也是给 AI 的开发指令**，每个功能模块附带明确的开发指引。
+> 后续所有修改请严格遵循本文档定义的文件结构和数据流规范。
 
 ---
 
 ## 二、产品形态
 
-### 双端架构
+### 版本定位
 
-| 版本 | 定位 | 核心场景 |
-|------|------|----------|
-| **桌面端（主力）** | 独立 Windows 应用 | 批量管理、打标签、整理素材库、维护索引与缓存 |
-| **插件端（附属）** | Adobe Premiere Pro 面板插件 | 在剪辑时快速搜索、预览、拖入时间线 |
+| 版本 | 定位 | 说明 |
+|------|------|------|
+| **桌面端** | 主力应用 | 独立 Windows 桌面应用，批量管理、打标签、整理素材库、维护索引与缓存 |
+| **插件端** | ❌ 已废弃 | Premiere Pro 插件不再开发，专注桌面端体验 |
 
 ### 数据模型总览
 
 系统统一拆分为三层：
 
-- **素材库层**：仅存放原始音频文件（本地磁盘 / NAS 素材目录）
+- **素材库层**：仅存放原始音频文件（本地磁盘素材目录）
 - **索引层**：维护文件实例、内容 ID、去重关系、波形缓存映射
-- **标签仓库层**：集中存储标签数据，支持本地仓库与远程 NAS 仓库双仓同步
-
-### 双仓模型
-
-标签系统采用：
-
-- **本地标签仓库**：主工作仓库，提供即时读写、离线编辑、快速搜索
-- **远程标签仓库（NAS）**：团队共享仓库，用于汇总统一标签结果
-
-### 同步策略
-
-- 本地编辑先写入本地标签仓库
-- 启动时同步一次
-- 退出时同步一次
-- 运行中定时同步
-- 同步冲突以 `contentId` 为粒度处理
-- 标签字段默认取并集，作者与时间戳保留
-- 波形缓存默认不参与双向同步，以本地缓存优先
+- **标签仓库层**：集中存储标签数据（本地仓库，暂不实现 NAS 双仓同步，保留扩展能力）
 
 ### 标识策略
 
 系统采用双层标识：
 
 - **file instance**：表示某个素材库中的某个具体文件实例
-- **contentId**：表示音频内容本身，用于标签共享、重复识别、波形缓存复用
+- **contentId**：表示音频内容本身，用于重复识别、标签关联、波形缓存复用
 
-当前推荐：
+当前实现：
 
 - `file instance = libraryId + relativePath`
-- `contentId = sha256(file bytes)`
-- 后续可扩展为音频指纹，以识别“同曲不同编码”场景
+- `contentId = 采样哈希`（文件头64KB + 尾64KB + 文件大小 + 修改时间戳，避免大文件全量读）
+- 后续可扩展为全量 SHA256 或音频指纹（识别同曲不同编码）
 
 ### 已验证依据
 
-在 `E:\常用素材\音乐` 中检索 `Brand X Music - Game Changer`，共命中 18 个文件实例，且所有文件的 `SHA256` 完全一致。
+在 `E:\常用素材\音乐` 中检索 `Brand X Music - Game Changer`，共命中 18 个文件实例，且所有文件的哈希一致。
 
 结论：
-
 - 这些文件是同一音频内容在多个目录中的重复拷贝
 - 标签主键不能绑定路径
 - 标签必须绑定 `contentId`
@@ -94,31 +81,58 @@
 
 ## 三、功能模块
 
-### 3.1 桌面端功能
+### 3.1 当前已完成功能
 
-| 模块 | 功能描述 | 优先级 |
-|------|----------|--------|
-| **文件浏览器** | 扫描本地目录、文件夹树展示、音频文件列表 | P0 |
-| **波形播放器** | 显示真实音频波形、点击波形跳播、播放头、进度控制、音量控制 | P0 |
-| **标签管理** | 添加/编辑/删除标签、批量打标签、标签分组 | P0 |
-| **搜索过滤** | 按文件名搜索、按标签过滤、多条件组合筛选 | P0 |
-| **索引系统** | 维护 `file-index / content-index`，支持切库秒开与重复识别 | P0 |
-| **标签仓库** | 标签数据采用本地仓库 + NAS 远程仓库双仓结构，按 `contentId` 关联 | P0 |
-| **同步机制** | 本地仓库与远程仓库定时双向同步，按 `contentId` 合并冲突 | P0 |
-| **去重提示** | 识别内容相同但路径不同的文件，提示复用标签与波形缓存 | P1 |
-| **快捷键** | 空格播放/暂停、方向键切换文件、常用操作快捷键 | P1 |
-| **波形缓存** | 独立缓存波形数据并复用，加速大文件加载 | P2 |
-| **多窗口工作区** | 支持音效库、音乐库等分窗口工作 | P2 |
+| 模块 | 功能描述 | 状态 |
+|------|----------|------|
+| **文件浏览器** | 扫描本地目录、文件夹树展示、音频文件列表 | ✅ 完成 |
+| **波形播放器** | 真实音频波形、点击波形跳播、播放头、进度控制、音量控制 | ✅ 完成 |
+| **标签管理** | 添加/编辑/删除标签、标签分组 | ✅ 完成 |
+| **搜索过滤** | 按文件名搜索、按标签过滤、多条件组合筛选 | ✅ 完成 |
+| **索引系统** | 维护 file-index / content-index，支持切库秒开与重复识别 | ✅ 完成 |
+| **标签仓库** | 本地标签仓库，按 contentId 关联 | ✅ 完成 |
+| **去重提示** | 识别内容相同但路径不同的文件 | ✅ 完成 |
+| **波形缓存** | 独立缓存波形数据并复用（LRU，500MB/10000文件上限） | ✅ 完成 |
+| **文件拖出** | 拖拽文件到外部应用（如 PR、剪映） | ✅ 完成 |
+| **素材库管理** | 添加/删除素材库、设置弹窗 | ✅ 完成 |
 
-### 3.2 插件端功能（Adobe CEP 12）
+### 3.2 后续开发优先级
 
-| 模块 | 功能描述 | 优先级 |
-|------|----------|--------|
-| **素材列表** | 读取索引与标签仓库，显示素材列表 | P0 |
-| **快速搜索** | 按文件名 / 标签 / 内容结果快速搜索 | P0 |
-| **波形预览** | 精简版波形显示、点击播放 | P0 |
-| **拖入时间线** | 将选中音频拖入 PR 时间线 | P0 |
-| **标签只读展示** | 显示标签信息（默认不直接写入，避免冲突） | P1 |
+#### P0 - 界面逻辑改进
+
+| 模块 | 功能描述 | 说明 |
+|------|----------|------|
+| **全局搜索** | 搜索框提到顶栏，支持多条件组合记忆 | 当前搜索在 FileListPanel 内部，应全局可用 |
+| **批量操作** | 多选文件 + 批量打标签、批量删除标签 | 当前只能单文件操作 |
+| **文件夹树体验** | 展开/折叠状态持久化、目录文件计数显示 | 当前每次刷新树状态丢失 |
+| **播放器改进** | 播放列表/队列、循环模式 | 当前只能逐首播放 |
+
+#### P0 - 标签系统深化
+
+| 模块 | 功能描述 | 说明 |
+|------|----------|------|
+| **标签视图** | 按标签聚合浏览素材（类似智能播放列表） | 核心需求：查看某个标签下所有素材 |
+| **标签统计** | 每个标签的使用次数、最近使用时间 | 帮助发现最常用的标签 |
+| **标签预设** | 预设常用标签组，快速分类 | 减少重复输入 |
+| **标签自动补全** | 输入标签值时自动匹配已有值 | 提升输入效率 |
+
+#### P1 - 体验优化
+
+| 模块 | 功能描述 |
+|------|----------|
+| **快捷键系统** | 空格播放/暂停、方向键切换文件、Ctrl+数字快速打标签 |
+| **暗色/亮色主题** | 补全暗色主题 CSS 变量，增加主题切换 |
+| **标签导入/导出** | JSON 格式导入导出标签数据 |
+| **播放列表** | 收藏 / 临时播放列表 |
+
+#### P2 - 远期
+
+| 模块 | 功能描述 |
+|------|----------|
+| **多窗口工作区** | 音效库、音乐库等分窗口工作 |
+| **AI 自动标签建议** | 基于文件名和音频特征自动推荐标签 |
+| **NAS 双仓同步** | 保留扩展能力，暂不实现 |
+| **音频指纹** | 识别同曲不同编码/不同码率 |
 
 ---
 
@@ -128,254 +142,368 @@
 
 | 分组 | 示例标签 | 说明 |
 |------|----------|------|
-| **情绪** | 激昂、悲伤、悬疑、温馨、紧张、轻松 | 核心分类维度 |
-| **能量** | 高、中、低 | 音乐能量强度 |
-| **类型** | BGM、音效、环境音、人声 | 素材类型 |
-| **来源** | 剧名、专辑名 | 记录素材出处 |
+| **情绪 (mood)** | 激昂、悲伤、悬疑、温馨、紧张、轻松 | 核心分类维度 |
+| **能量 (energy)** | 高、中、低 | 音乐能量强度 |
+| **类型 (type)** | BGM、音效、环境音、人声 | 素材类型 |
+| **来源 (source)** | 剧名、专辑名 | 记录素材出处 |
 | **自定义** | 用户自定义 | 灵活扩展 |
 
-### 数据结构示例
+### 数据结构
 
-#### file-index.json
+详见代码 `src/lib/types.ts` 中的类型定义。核心文件：
 
-```json
-{
-  "version": "2.0",
-  "libraries": {
-    "music-main": {
-      "name": "主音乐库",
-      "path": "E:/常用素材/音乐"
-    }
-  },
-  "files": [
-    {
-      "fileId": "music-main:现代 男频 赌博《利刃出鞘》/紧张危机行动/（用烂了）Brand X Music - Game Changer.mp3",
-      "libraryId": "music-main",
-      "relativePath": "现代 男频 赌博《利刃出鞘》/紧张危机行动/（用烂了）Brand X Music - Game Changer.mp3",
-      "absolutePath": "E:/常用素材/音乐/现代 男频 赌博《利刃出鞘》/紧张危机行动/（用烂了）Brand X Music - Game Changer.mp3",
-      "size": 7057408,
-      "modifiedAt": 1711910000,
-      "contentId": "sha256:317E59FB2A0B85D2C56C9797BA482C8661203C8DCAD4F2684DA5A03EA02EEB5D"
-    }
-  ]
-}
-```
-
-#### content-index.json
-
-```json
-{
-  "version": "2.0",
-  "contents": {
-    "sha256:317E59FB2A0B85D2C56C9797BA482C8661203C8DCAD4F2684DA5A03EA02EEB5D": {
-      "canonicalName": "Brand X Music - Game Changer",
-      "instances": [
-        "music-main:现代 男频 赌博《利刃出鞘》/紧张危机行动/（用烂了）Brand X Music - Game Changer.mp3",
-        "music-main:现代 男频 赌博《出笼》/紧张危机行动/（用烂了）Brand X Music - Game Changer.mp3"
-      ],
-      "waveformCache": "cache/waveforms/317E59FB2A0B85D2.json"
-    }
-  }
-}
-```
-
-#### local-tags.json / shared-tags.json
-
-```json
-{
-  "version": "2.1",
-  "users": {
-    "zhangsan": { "name": "张三", "role": "admin" },
-    "lisi": { "name": "李四", "role": "editor" }
-  },
-  "contents": {
-    "sha256:317E59FB2A0B85D2C56C9797BA482C8661203C8DCAD4F2684DA5A03EA02EEB5D": {
-      "tags": {
-        "mood": [
-          { "value": "紧张", "author": "zhangsan", "createdAt": "2026-03-30T10:00:00Z" },
-          { "value": "压迫", "author": "lisi", "createdAt": "2026-03-31T14:30:00Z" }
-        ],
-        "energy": [
-          { "value": "高", "author": "zhangsan", "createdAt": "2026-03-30T10:00:00Z", "verified": true }
-        ],
-        "type": [
-          { "value": "BGM", "author": "zhangsan", "createdAt": "2026-03-30T10:00:00Z", "verified": true }
-        ]
-      },
-      "lastMergedAt": "2026-04-01T00:00:00Z"
-    }
-  },
-  "settings": {
-    "collaborativeMode": true,
-    "repositoryMode": "dual",
-    "conflictResolution": "merge-by-contentId"
-  }
-}
-```
+| 文件名 | 用途 | 存储位置 |
+|--------|------|----------|
+| `settings.json` | 素材库配置、用户设置 | Electron 主进程 userData |
+| `file-index.json` | 文件实例 -> 元数据映射 | Electron 主进程 userData |
+| `content-index.json` | contentId -> 实例列表 + 波形缓存路径 | Electron 主进程 userData |
+| `local-tags.json` | contentId -> 标签数据 | Electron 主进程 userData |
+| `name-index.json` | 文件名归一化 -> 历史标签建议 | Electron 主进程 userData |
 
 ### 标签合并原则
 
-- 本地编辑先写入 `local-meta`
-- 后台定时同步到 `shared-meta`
-- 冲突以 `contentId` 为粒度合并
-- 标签字段默认取并集，保留作者与时间戳信息
-- 波形缓存默认不参与双向同步，以本地缓存优先
+- 单人使用场景，标签直接写入 local-tags.json
+- 以 contentId 为核心关联标签，不绑定路径
+- 支持基于文件名的智能标签建议（name-index.json）
 
 ---
 
-## 五、团队协作标签系统（未来迭代）
-
-### 设计目标
-
-支持团队成员通过 NAS 共享标签仓库与索引结果，区分标签来源，支持协作编辑，同时保留本地高性能工作副本。
-
-### 协作机制
-
-| 机制 | 说明 |
-|------|------|
-| **用户身份** | 每次写入记录操作者（用户名 / ID） |
-| **时间戳** | 创建时间 + 最后修改时间 |
-| **标签投票** | 多人标记同一标签，显示标记人数作为置信度 |
-| **审核标记** | 官方 / 可信用户可标记“已验证”标签 |
-| **版本控制** | 写入时检查版本号，冲突提示合并 |
-| **内容主键** | 所有协作标签以 `contentId` 为核心，不绑定路径 |
-
-### 权限分层
-
-| 角色 | 权限 |
-|------|------|
-| **管理员** | 可编辑、删除任意标签，审核标签，管理用户 |
-| **编辑者** | 可添加 / 编辑自己的标签，查看所有标签 |
-| **查看者** | 仅可查看标签，无法编辑 |
-
-### 存储策略
-
-- **本地仓库**：主工作仓库，负责快速读写与离线编辑
-- **远程仓库（NAS）**：团队共享仓库，负责集中同步与协作
-- **索引策略**：通过 `file-index / content-index` 维护“文件实例 -> contentId”映射
-- **冲突处理**：按 `contentId` 合并，标签取并集
-- **缓存策略**：波形缓存独立存储，默认本地优先，可后续扩展共享缓存
-
-### 脱敏导出
-
-支持导出时隐藏作者信息，仅输出纯标签数据供外包或下游系统使用。
-
----
-
-## 六、界面布局（桌面端）
+## 五、界面布局
 
 ```text
 ┌────────────────────────────────────────────────────────────────┐
-│  顶栏：素材库切换 | 搜索 | 设置 | 多窗口                        │
+│  顶栏：素材库切换 | [全局搜索框] | 设置     主题切换            │
 ├───────────────┬────────────────────────────────────────────────┤
-│               │  搜索栏：[____________________________]         │
+│               │  搜索栏（文件名/标签快速过滤）                   │
 │   文件树 /     ├────────────────────────────────────────────────┤
-│   标签筛选     │  素材列表                                      │
+│   标签筛选     │  素材列表（虚拟滚动）                           │
 │               │  ┌──────────────────────────────────────────┐ │
 │  📁 音乐库     │  │ 🎵 Brand X Music - Game Changer         │ │
-│  📁 音效库     │  │    [紧张][高][BGM] [重复内容]            │ │
+│  📁 音效库     │  │    [紧张][高][BGM] [重复×3]              │ │
 │  标签：[紧张]  │  │ 🔊 ambient_forest.wav                    │ │
 │  标签：[高]    │  │ ...                                      │ │
 │               │  └──────────────────────────────────────────┘ │
 ├───────────────┴────────────────────────────────────────────────┤
-│                                                                │
 │  波形显示区（可点击跳播 / 可拖拽改高度）                        │
-│                                                                │
 ├────────────────────────────────────────────────────────────────┤
-│  ▶️  ⏮  ⏭                                🔊  ───────          │
-│  00:12 ━━━━━━━━━●━━━━━━━━━━━━━━ 03:00                           │
-├────────────────────────────────────────────────────────────────┤
-│  📄 当前文件 │ 标签：[紧张] [高] [BGM] [＋]                    │
+│  ▶️  ⏮  ⏭              🔄 列表循环        🔊  ───────        │
+│  00:12 ━━━━━━━━━●━━━━━━━━━━━━━━ 03:00          标签：[＋]    │
 └────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 七、技术架构
-
-### 桌面端
-
-```text
-┌─────────────────────────────────────────────────┐
-│              前端（React + TypeScript）         │
-│  ┌──────────┬────────────────┬────────────────┐ │
-│  │ 文件树/筛选│ 素材列表        │ 标签面板       │ │
-│  ├──────────┴────────────────┴────────────────┤ │
-│  │            搜索 / 过滤栏                    │ │
-│  ├─────────────────────────────────────────────┤ │
-│  │         波形显示 / 播放控制 / 跳播            │ │
-│  └─────────────────────────────────────────────┘ │
-├─────────────────────────────────────────────────┤
-│              Rust 后端（Tauri 2.x）            │
-│  - 文件系统扫描与监听                           │
-│  - file-index / content-index / tags 仓库读写  │
-│  - SHA256 contentId 生成                        │
-│  - 波形缓存生成与复用                           │
-│  - 本地仓库与远程仓库同步                       │
-└─────────────────────────────────────────────────┘
-```
-
-### 插件端
-
-```text
-┌─────────────────────────────────────────────────┐
-│         前端（复用 React 组件，精简版）         │
-│  ┌─────────────────────────────────────────────┐ │
-│  │   搜索栏 + 素材列表 + 精简波形预览           │ │
-│  └─────────────────────────────────────────────┘ │
-├─────────────────────────────────────────────────┤
-│          CSInterface.js + CEP 12 API           │
-│  - 读取 file-index / content-index / tags 仓库 │
-│  - 拖拽音频到 Premiere Pro 时间线               │
-│  - 与宿主应用 Premiere Pro 通信                 │
-└─────────────────────────────────────────────────┘
-```
+## 六、技术架构
 
 ### 技术选型
 
 | 层面 | 选择 | 理由 |
 |------|------|------|
-| **桌面端框架** | Tauri 2.x | 轻量、低内存占用、Rust 后端性能强 |
-| **前端框架** | React + TypeScript | 生态成熟、组件可复用到插件端 |
-| **波形方案** | Web Audio API + Canvas / 可扩展缓存 | 可控性强，适合自定义波形缓存策略 |
-| **UI 组件** | TailwindCSS + shadcn/ui | 现代感强、轻量、可定制 |
-| **数据存储** | JSON 索引 + 双仓标签仓库 | 适配团队协作、支持去重共享、便于缓存与审计 |
-| **内容标识** | SHA256（第一阶段） | 实现简单、去重稳定，后续可升级音频指纹 |
-| **插件框架** | Adobe CEP 12 | Premiere Pro 官方扩展标准方案 |
+| **桌面端框架** | Electron | 桌面集成与系统级能力 |
+| **前端框架** | React 19 + TypeScript | 生态成熟 |
+| **波形方案** | Web Audio API + ffmpeg + 缓存 | 可控性强 |
+| **UI 组件** | TailwindCSS v4 + shadcn/ui | 现代感强 |
+| **数据存储** | JSON 索引文件 | 简单可靠，适配单人场景 |
+| **内容标识** | 采样哈希 | 实现简单、去重稳定 |
+| **状态管理** | **Zustand** ✅ | 无 Props drilling，适合 vibe coding |
+| **虚拟列表** | react-window | 大列表性能 |
+| **测试** | Vitest + Testing Library | 核心纯函数 |
+
+### 架构总览
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│                       渲染进程 (React)                       │
+│                                                                │
+│  ┌────────────────────────────────────────────────────────┐  │
+│  │  Zustand Store（4 个）                                 │  │
+│  │  ├─ libraryStore  素材库数据 + CRUD 操作               │  │
+│  │  ├─ playerStore   播放器状态 + 播放控制                 │  │
+│  │  ├─ tagStore      标签状态 + 标签操作                   │  │
+│  │  └─ uiStore       搜索词/侧栏/弹窗等 UI 状态            │  │
+│  └──────────┬─────────────────────────────────────────────┘  │
+│             │ 每个 Store 提供 useXxxStore(selector) 接口       │
+│  ┌──────────▼─────────────────────────────────────────────┐  │
+│  │  子组件（Component）                                  │  │
+│  │  LibrarySidebar  FileListPanel  WaveformPlayer        │  │
+│  │  TagInspector   SettingsDialog  DropInspectorWindow   │  │
+│  │  └─ 内部 use LibraryStore() / usePlayerStore() ...    │  │
+│  │  自行订阅所需状态，不靠父组件传 props                   │  │
+│  └────────────────────────────────────────────────────────┘  │
+│             │                                                │
+│  ┌──────────▼─────────────────────────────────────────────┐  │
+│  │  Pure Functions (lib/*.ts)                            │  │
+│  │  无副作用的纯函数：状态转换、过滤、视图模型构建           │  │
+│  │  可独立测试，不依赖 React                              │  │
+│  └────────────────────────────────────────────────────────┘  │
+│             │                                                │
+│  ┌──────────▼─────────────────────────────────────────────┐  │
+│  │  Effects + API (lib/*-effects.ts + lib/api.ts)        │  │
+│  │  副作用编排：调用 IPC → 处理结果 → 更新 Store           │  │
+│  └────────────────────────────────────────────────────────┘  │
+├──────────────────────────────────────────────────────────────┤
+│                  Bridge (IPC / preload.ts)                   │
+├──────────────────────────────────────────────────────────────┤
+│                    Electron 主进程 (Node.js)                  │
+│  - 文件系统扫描 (library-scan.ts)                            │
+│  - 索引读写 (library-storage.ts)                             │
+│  - SHA256 采样哈希生成 (audio.ts)                             │
+│  - 波形生成 (ffmpeg.ts + waveform-generator.ts)              │
+│  - 标签 CRUD (tags.ts)                                       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 四个 Store 各自管什么
+
+| Store | 状态 | 操作 | 被哪些组件订阅 |
+|-------|------|------|---------------|
+| **libraryStore** | libraries, activeLibrary, folderTree, allFiles, tags, contentIndex, nameSuggestions, miniWaveforms, syncStatus, libraryLoadState | selectLibrary, handleAddLibrary/RemoveLibrary, toggleFolder, applySnapshot, initLibraries | LibrarySidebar, FileListPanel, TagInspector, SettingsDialog |
+| **playerStore** | currentFile, isPlaying, isLoading, currentTime, duration, volume, isMuted | selectFile, togglePlay, toggleMute, setVolume, seekToPercent, resetPlayerState | FileListPanel, WaveformPlayer, TagInspector |
+| **(+) audioRef / progressRef** | 模块级 DOM 引用（不在 Store 内） | WaveformPlayer 内部绑定 `<audio>` 元素 | — |
+| **(+) usePlayerAudioEffect** | 副作用 Hook（挂载一次） | 音量同步、音频事件绑定、切文件时加载波形 | App.tsx 调用 |
+| **tagStore** | tagFilters, showTagEditor, newTagValue, selectedTagGroup | handleAddTag, handleRemoveTag, handleAdoptSuggestion, toggleTagFilter | LibrarySidebar, FileListPanel, TagInspector |
+| **(+) useCurrentFileMeta** | 便捷选择器 | 从 playerStore + libraryStore 计算当前文件元信息 | TagInspector |
+| **uiStore** | searchQuery, showSettings, showDropInspector, showSidebar, sidebarWidth, isResizingSidebar | setSearchQuery, setShowSettings 等 setter | App.tsx, LibrarySidebar, FileListPanel, SettingsDialog |
+| **(+) useSidebarResizeEffect** | 副作用 Hook | 鼠标拖拽调整侧栏宽度 | App.tsx 调用 |
+
+### 数据流
+
+```
+用户点击"播放"按钮
+  → WaveformPlayer 调用 playerStore.togglePlay()
+    → playerStore 更新 isPlaying 状态
+    → 所有订阅 usePlayerStore((s) => s.isPlaying) 的组件自动重渲染
+      → WaveformPlayer 按钮图标从 ▶ 变为 ⏸
+```
+
+```
+用户给文件打标签
+  → TagInspector 调用 tagStore.handleAddTag()
+    → tagStore 读取 playerStore.currentFile（跨 Store 取数据）
+    → tagStore 调用 Electron IPC（通过 api.ts）
+    → tagStore 刷新 libraryStore 的快照（通过 applySnapshot）
+    → libraryStore 更新 tags 状态
+    → FileListPanel 自动重渲染（标签筛选变化）
+    → TagInspector 自动重渲染（标签列表变化）
+```
+
+### App.tsx 的角色
+
+App.tsx 目前只做三件事：
+
+```
+1. 初始化：调用 libraryStore.initLibraries()（启动时加载素材库）
+2. 挂载副作用 Hook：usePlayerAudioEffect()、useSidebarResizeEffect()
+3. 跨 Store 协调：切换文件时自动关闭标签编辑器
+```
+
+App.tsx **不传递任何业务数据给子组件**。子组件全部通过 `useXxxStore()` 自行订阅。
+
+### 目录结构（渲染进程）
+
+```
+src/
+├── main.tsx                    # 入口
+├── App.tsx                     # 顶层协调（70 行，无 Props drilling）
+├── index.css                   # Tailwind + CSS 变量主题
+│
+├── stores/                     # Zustand Store ★ 核心新增
+│   ├── libraryStore.ts         # 素材库状态 + 操作
+│   ├── playerStore.ts          # 播放器状态 + 操作
+│   ├── tagStore.ts             # 标签状态 + 操作
+│   └── uiStore.ts              # UI 状态 + 操作
+│
+├── lib/                        # 纯函数 + 副作用（无 React 依赖）
+│   ├── types.ts                # 所有类型定义
+│   ├── api.ts                  # Electron IPC 调用封装
+│   ├── bridge-contract.ts      # Bridge 接口契约
+│   ├── utils.ts                # 通用工具函数
+│   ├── logger.ts               # 日志
+│   ├── app-constants.ts        # 常量（TAG_GROUPS, LIBRARY_TYPES）
+│   ├── file-filtering.ts       # 文件搜索/标签过滤
+│   ├── tag-domain-state.ts     # 标签领域纯函数
+│   ├── tag-domain-effects.ts   # 标签领域副作用
+│   ├── tag-actions.ts          # 标签原子查询
+│   ├── tag-inspector-state.ts  # 标签视图模型
+│   ├── drag-state.ts           # 拖拽状态
+│   ├── drag-debug-view-model.ts# 拖拽调试视图
+│   ├── drop-inspector-state.ts # 拖放事件快照
+│   ├── library-state.ts        # 素材库纯函数
+│   ├── player-state.ts         # 播放器纯函数
+│   ├── sidebar-resize-state.ts # 侧栏 resize 状态
+│   ├── waveform-player-state.ts# 波形播放器辅助
+│   ├── app-shell-actions.ts    # 顶层动作
+│   ├── app-shell-view-model.ts # 视图模型
+│   ├── app-effects.ts          # 应用级副作用
+│   ├── app-orchestration.ts    # 应用编排工具
+│   ├── audio-element-effects.ts# 音频元素绑定
+│   ├── library-actions.ts      # 库原子查询
+│   ├── library-domain-effects.ts# 库领域副作用
+│   ├── player-actions.ts       # 播放器原子查询
+│   ├── player-domain-effects.ts# 播放器领域副作用
+│   ├── library-controller-state.ts # 库控制器状态
+│   ├── player-controller-state.ts  # 播放器控制器状态
+│   ├── library-management-actions.ts # 库管理操作
+│   └── use-mini-waveform-preload.ts  # 迷你波形预加载 Hook
+│
+├── hooks/                      # （保留旧代码，新功能不再使用）
+│   ├── useLibraryDomain.ts     # → 已迁移到 libraryStore
+│   ├── usePlayerDomain.ts      # → 已迁移到 playerStore
+│   ├── useTagDomain.ts         # → 已迁移到 tagStore
+│   └── useAppUiState.ts        # → 已迁移到 uiStore
+│
+├── components/
+│   ├── ui/                     # shadcn/ui 基础组件
+│   │   ├── button.tsx
+│   │   ├── badge.tsx
+│   │   └── input.tsx
+│   ├── LibrarySidebar.tsx       # 左侧栏（自行订阅 Store）
+│   ├── FileListPanel.tsx        # 文件列表（自行订阅 Store）
+│   ├── WaveformPlayer.tsx       # 底部播放器（自行订阅 Store）
+│   ├── TagInspector.tsx         # 标签面板（自行订阅 Store）
+│   ├── SettingsDialog.tsx       # 设置弹窗（自行订阅 Store）
+│   ├── ErrorBoundary.tsx        # 错误边界
+│   └── DropInspectorWindow.tsx  # 拖放调试窗口
+│
+└── test/                       # Vitest 测试（25 文件，63 用例）
+```
+
+---
+
+## 七、开发指引（给 AI 的指令模板）
+
+> 本节是 vibe coding 的核心——每个功能的修改都按以下模板操作。
+> 使用时，直接粘贴对应模板 + 你的需求给 AI。
+
+### 快速理解架构（给人类开发者）
+
+```
+┌──────────────────────────────────────────┐
+│ 你只需要记住一个原则：                      │
+│                                          │
+│  每个组件用 useXxxStore() 自己拿数据      │
+│  不需要父组件传 props                     │
+│                                          │
+│  想改一个组件 → 打开那个文件 → 改     │
+│  想新增一个功能 → 找到对应 Store → 加 action │
+│  想新增一个组件 → 从 Store 读数据写 UI   │
+└──────────────────────────────────────────┘
+```
+
+**四个 Store 分别是**：
+- `useLibraryStore()` → 素材库的一切（文件列表、文件夹树、标签数据、索引）
+- `usePlayerStore()` → 播放器的一切（当前文件、播放状态、音量）
+- `useTagStore()` → 标签操作的一切（添加/删除标签、筛选、采纳建议）
+- `useUiStore()` → UI 状态的一切（搜索词、弹窗开关、侧栏宽度）
+
+**使用 Store 的两种姿势**：
+```typescript
+// 姿势 1：订阅单个值（组件会随这个值变化而重渲染）
+const currentFile = usePlayerStore((s) => s.currentFile);
+
+// 姿势 2：在回调/事件中临时读取（不需要订阅）
+const handleClick = () => {
+  const state = usePlayerStore.getState();
+  state.togglePlay();
+};
+```
+
+**跨 Store 通信**：Store 之间可以通过 `useXxxStore.getState()` 互相读取，无需 Props drilling。
+
+### 通用修改流程
+
+```
+修改任何功能请遵循以下步骤：
+1. 修改纯函数：src/lib/*.ts（如果需要新增逻辑函数）
+2. 修改副作用：src/lib/*-effects.ts（如果需要调 Electron API 后的处理）
+3. 修改 Store：src/stores/xxxStore.ts（暴露新状态或新操作）
+4. 修改组件：src/components/Xxx.tsx（用 useXxxStore() 读取新状态）
+5. 确保 type 定义一致：src/lib/types.ts
+```
+
+### 新增标签功能
+
+```
+如需新增标签相关功能，按此顺序修改文件：
+
+1. src/lib/tag-domain-state.ts
+   新增纯函数处理标签数据转换
+2. src/lib/tag-domain-effects.ts
+   新增副作用编排（如果需要调用 Electron API）
+3. src/stores/tagStore.ts
+   暴露新状态和操作
+4. src/components/TagInspector.tsx
+   用 useTagStore() 读取新数据，添加对应 UI
+```
+
+### 新增 UI 功能
+
+```
+如需新增 UI 组件或修改 UI：
+
+1. src/lib/types.ts（如果需要新类型）
+2. src/stores/xxxStore.ts（如果需要新状态，用 set() 加一个字段）
+3. src/components/YourNewComponent.tsx
+   用 useXxxStore() 自行读取数据，不需要父组件传 props
+4. src/App.tsx（如果需要在顶层挂载新组件，直接加一行 <YourNewComponent />）
+```
 
 ---
 
 ## 八、开发计划
 
-### 阶段划分
+### 当前状态：阶段 4 - 界面与标签深化（进行中）
 
-| 阶段 | 时间估算 | 交付产出 |
-|------|----------|----------|
-| **阶段 1：桌面端原型** | 3-5 天 | 文件浏览、波形显示、点击波形跳播、基础播放 |
-| **阶段 2：标签系统** | 3-5 天 | 本地标签仓库、contentId、搜索与过滤 |
-| **阶段 3：索引与协作基础** | 3-5 天 | file-index / content-index、本地标签仓库、重复识别 |
-| **阶段 4：双仓同步** | 3-5 天 | 本地仓库 + NAS 仓库同步、冲突合并 |
-| **阶段 5：插件端** | 3-5 天 | CEP 打包、搜索预览、拖入时间线 |
-| **总计** | **约 3-4 周** | 完整双端可用产品 |
+| 任务 | 优先级 | 状态 |
+|------|--------|------|
+| **引入 Zustand，消除 Props drilling** | P0 | ✅ **已完成** |
+| **全局搜索框** | P0 | ⏳ 待开始 |
+| **标签视图（按标签聚合浏览）** | P0 | ⏳ 待开始 |
+| **批量打标签（多选 + 批量操作）** | P0 | ⏳ 待开始 |
+| **文件夹树展开状态持久化 + 文件计数** | P0 | ⏳ 待开始 |
+| **标签自动补全** | P0 | ⏳ 待开始 |
+| **播放列表 / 循环模式** | P1 | ⏳ 待开始 |
+| **快捷键系统** | P1 | ⏳ 待开始 |
+| **暗色/亮色主题** | P1 | ⏳ 待开始 |
+| **标签导入/导出** | P1 | ⏳ 待开始 |
+| **标签统计面板** | P1 | ⏳ 待开始 |
 
-### 后续迭代方向（P2/P3 功能）
+### 迭代说明
 
-- 波形数据预生成缓存与共享缓存
-- 音频指纹（识别同曲不同编码）
-- AI 自动标签建议（基于音频特征分析）
-- 素材导入 / 导出（素材库迁移）
-- 多语言支持（英文界面）
-
----
-
-## 九、待确认事项
-
-- [x] 产品正式命名（The Arcane Crate）
-- [x] 支持的音频格式范围（WAV、MP3，已扩展支持 M4A）
-- [x] 插件端是否需要支持 After Effects（仅 Premiere Pro）
-- [x] 标签仓库采用本地仓库 + NAS 远程仓库双仓模型
-- [ ] 是否需要后续云同步功能（在双仓之外再扩展跨设备同步）
+> 每次迭代请只改 1-2 个功能，改完后跑 `npm run test` 确认测试通过，
+> 再手动打开应用验证修改正确后，再进入下一个功能。
 
 ---
 
-*文档已统一为 contentId 驱动的索引 + 双仓标签仓库方案，后续代码落地以此为准。*
+## 九、测试策略
+
+| 类型 | 覆盖范围 | 说明 |
+|------|----------|------|
+| **单元测试（纯函数）** | src/lib/*.ts | ✅ 已有 34 个测试文件，新加纯函数必须补测试 |
+| **主进程测试** | electron/*.ts | ❌ 未覆盖，后续补上关键路径 |
+| **组件集成测试** | components/*.tsx | ❌ 未覆盖，后续补上核心组件 |
+
+---
+
+## 十、增量迭代清单
+
+> 以下列表供每次开发时对照，勾选已完成项。
+
+- [x] 引入 Zustand，创建 libraryStore、playerStore、tagStore、uiStore
+- [x] 将 App.tsx 的 Props drilling 替换为 Store 直接读取（64 props → 2 props）
+- [ ] 将搜索框从 FileListPanel 提到顶栏全局位置
+- [ ] 实现标签视图：左侧标签列表 → 右侧该标签下所有文件
+- [ ] 实现多选文件 + 批量打标签
+- [ ] 实现文件夹树展开状态本地持久化
+- [ ] 实现标签输入自动补全
+- [ ] 实现播放列表 / 循环模式
+- [ ] 注册全局快捷键（空格、方向键）
+- [ ] 补全暗色主题
+- [ ] 实现标签导出（JSON）和导入
+- [ ] 添加标签统计面板（各标签使用次数）
+- [ ] 补充 Electron 主进程单元测试
+- [ ] 移除 DropInspectorWindow 调试组件（稳定后）
+
+---
+
+*本文档随项目迭代持续更新。每个版本更新时修改顶部版本号和日期。*

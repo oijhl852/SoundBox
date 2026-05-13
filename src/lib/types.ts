@@ -15,17 +15,49 @@ export interface FolderNode {
 }
 
 export interface TagEntry {
+  group?: string;
   value: string;
   author: string;
   createdAt: string;
   verified?: boolean;
 }
 
+export interface SuggestedTagEntry {
+  group: string;
+  value: string;
+}
+
+export interface NameTagSuggestion {
+  normalizedName: string;
+  tags: SuggestedTagEntry[];
+  sourceContentIds: string[];
+  confidence: number;
+  sourceSummary: string;
+}
+
+
+
 export interface AudioMetadata {
   tags: Record<string, TagEntry[]>;
   duration?: number;
   waveformCache?: string;
 }
+
+export interface AudioSourceResponse {
+  path: string;
+  mime: string;
+}
+
+export interface WaveformResponse {
+  duration: number;
+  peaks: number[];
+}
+
+export interface MiniWaveformMap {
+  [path: string]: number[];
+}
+
+
 
 export interface LocalTagsFile {
   version: string;
@@ -95,11 +127,37 @@ export interface ContentIndexFile {
   contents: Record<string, ContentIndexEntry>;
 }
 
+export interface DragDebugState {
+  stage: "idle" | "renderer-dispatched" | "ipc-received" | "start-called" | "error";
+  timestamp: string;
+  filePath: string | null;
+  iconPath: string | null;
+  senderId: number | null;
+  senderUrl: string | null;
+  windowTitle: string | null;
+  detail: string | null;
+  error: string | null;
+}
+
 export interface LibrarySnapshot {
   tree: FolderNode;
   fileIndex: FileIndexFile;
   contentIndex: ContentIndexFile;
   localTags: LocalTagsFile;
+  nameIndex: {
+    version: string;
+    names: Record<string, { contentIds: string[]; tagHints: Record<string, string[]>; updatedAt: string }>;
+  };
+  nameSuggestions: Record<string, NameTagSuggestion>;
   usedCache: boolean;
   indexingComplete: boolean;
 }
+
+// 统一的文件元数据类型，用于前端组件间传递
+export interface FileMeta {
+  name: string;
+  path: string;
+  folder: string;
+  contentId?: string;
+}
+
