@@ -9,6 +9,9 @@ src-tauri/target/
 # ffmpeg binaries (download separately)
 ffmpeg-8.1-essentials_build/
 
+# CodeBuddy config
+.codebuddy/
+
 # IDE
 .vscode/
 .idea/
@@ -22,3 +25,7 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# Generated JS files
+*.js.map
+src/lib/types.js
