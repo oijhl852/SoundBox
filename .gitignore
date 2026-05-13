@@ -1,0 +1,44 @@
+﻿# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+
+# ffmpeg binaries (download separately)
+ffmpeg-8.1-essentials_build/
+
+# CodeBuddy config
+.codebuddy/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Generated JS files
+*.js.map
+src/lib/types.js
+
+# Personal design doc
+soundbox-design.md
+
+# Temporary / dev files
+2026-04-03*.txt
+P0-P1-fix-summary.md
+video-hub-app-drag-implementation.md
+
+# Dev process docs
+docs/
+
+# Release builds
+release/
