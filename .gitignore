@@ -42,3 +42,9 @@ docs/
 
 # Release builds
 release/
+
+# Portable builds
+app-portable/
+
+# Root-level stray compiled files
+window.js

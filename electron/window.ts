@@ -48,6 +48,6 @@ export function createMainWindow(options: {
 export function resolveWindowPaths(baseDir: string) {
   return {
     preloadPath: path.join(baseDir, "preload.js"),
-    distIndexPath: path.join(baseDir, "../dist/index.html"),
+    distIndexPath: path.join(baseDir, "../../dist/index.html"),
   };
 }

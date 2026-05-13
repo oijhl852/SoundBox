@@ -19,6 +19,6 @@
     }
   },
 
-  "include": ["electron/**/*.ts", "src/lib/types.ts"]
+  "include": ["electron/**/*.ts", "src/lib/types.ts", "src/lib/logger.ts"]
 }
 
