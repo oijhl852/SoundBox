@@ -193,6 +193,10 @@ export function usePlayerAudioEffect() {
         });
       },
       playheadRafRef,
+      getFallbackDuration: () => {
+        const path = usePlayerStore.getState().currentFile?.path;
+        return path ? (fileDurationCache[path] ?? 0) : 0;
+      },
     });
   }, []);
 

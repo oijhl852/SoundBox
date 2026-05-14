@@ -28,9 +28,9 @@ describe("audio-element-effects", () => {
       playheadRafRef: { current: null },
     });
 
-    expect(addEventListener).toHaveBeenCalledTimes(6);
+    expect(addEventListener).toHaveBeenCalledTimes(8);
     cleanup();
-    expect(removeEventListener).toHaveBeenCalledTimes(6);
+    expect(removeEventListener).toHaveBeenCalledTimes(8);
   });
 
   it("updates state through handlers without throwing", () => {

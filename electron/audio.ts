@@ -8,6 +8,8 @@ export function guessAudioMime(filePath: string): string {
   if (lower.endsWith(".wav")) return "audio/wav";
   if (lower.endsWith(".m4a")) return "audio/mp4";
   if (lower.endsWith(".ogg")) return "audio/ogg";
+  if (lower.endsWith(".flac")) return "audio/flac";
+  if (lower.endsWith(".aac")) return "audio/aac";
   return "audio/mpeg";
 }
 
@@ -41,8 +43,8 @@ export async function computeContentId(filePath: string): Promise<string> {
     hash.update(tailBuffer);
   }
 
-  // 加入文件大小和修改时间，确保唯一性
-  hash.update(`:${stats.size}:${Math.floor(stats.mtimeMs)}`);
+  // 加入文件大小（不含 mtime——mtime 可能被系统服务改动，导致缓存 key 失效）
+  hash.update(`:${stats.size}`);
 
   return `sha256:${hash.digest("hex").toUpperCase()}`;
 }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, protocol } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { registerLocalAudioProtocol } from "./protocols.js";
@@ -19,6 +19,7 @@ const windowPaths = resolveWindowPaths(__dirname);
 
 app.whenReady().then(() => {
   log("info", "[main] app:ready");
+  Menu.setApplicationMenu(null); // 去掉默认菜单栏
   registerLocalAudioProtocol(protocol);
   registerSoundboxIpcHandlers(ipcMain);
   createMainWindow({

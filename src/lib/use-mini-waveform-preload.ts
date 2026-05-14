@@ -4,6 +4,7 @@ import { getMissingMiniWaveformFiles } from "./app-shell-actions";
 import { logError } from "./logger";
 import { mergeMiniWaveforms } from "./app-effects";
 import { fileDurationCache } from "@/stores/playerStore";
+import { browserWaveform } from "./browser-waveform";
 import type { FileMeta, MiniWaveformMap } from "./types";
 
 // ── 模块级计数器 ──
@@ -29,7 +30,7 @@ async function loadWaveformBatch(
   jobId: number,
   setMiniWaveforms: (updater: MiniWaveformMap | ((prev: MiniWaveformMap) => MiniWaveformMap)) => void
 ) {
-  // 不在这里调 loadMetaForBatch——波形分析内部也会跑 ffprobe，避免重复
+  // 不在这里调 loadMetaForBatch——waveform 返回结果已包含 duration
   const results = await Promise.all(
     files.map(async (file) => {
       try {
@@ -50,7 +51,8 @@ async function loadWaveformBatch(
   setMiniWaveforms((prev) => mergeMiniWaveforms(prev, entries));
 }
 
-// ── 紧急预载 ──
+// ── 紧急预载（Level 0）──
+// 浏览器解码器与 ffmpeg 子进程竞速，谁先返回就用谁
 export async function preloadSingleFile(
   filePath: string,
   miniWaveforms: MiniWaveformMap,
@@ -59,16 +61,23 @@ export async function preloadSingleFile(
   if (miniWaveforms[filePath]?.length) return;
   urgentJobId++;
 
-  // 紧急情况下先确保 duration 就绪
-  if (fileDurationCache[filePath] === undefined) {
-    try {
-      const meta = await getAudioMeta(filePath);
-      if (meta.duration > 0) fileDurationCache[filePath] = meta.duration;
-    } catch {}
-  }
-
   try {
-    const waveform = await getWaveformPeaks(filePath);
+    const waveform = await Promise.race([
+      browserWaveform(filePath).catch(() => null as never),
+      getWaveformPeaks(filePath),
+    ]);
+
+    if (!waveform) {
+      // 浏览器端挂了，等 ffmpeg 的结果
+      const fallback = await getWaveformPeaks(filePath);
+      if (fallback.duration > 0) fileDurationCache[filePath] = fallback.duration;
+      setMiniWaveforms((prev) => {
+        if (prev[filePath]?.length) return prev;
+        return { ...prev, [filePath]: fallback.peaks };
+      });
+      return;
+    }
+
     if (waveform.duration > 0) fileDurationCache[filePath] = waveform.duration;
     setMiniWaveforms((prev) => {
       if (prev[filePath]?.length) return prev;
@@ -103,11 +112,12 @@ export function useBackgroundWaveformPreload(options: {
     const missing = allFiles.filter((f) => !miniWaveforms[f.path]?.length);
     if (missing.length === 0) return;
 
-    // 先扫一批元数据，让 duration 尽快就绪
-    const metaBatch = missing.slice(0, batchSize * 3);
-    void loadMetaForBatch(metaBatch);
-
     const batch = missing.slice(0, batchSize);
+
+    // 先扫一批元数据让 duration 尽快就绪（仅扫波形批次外的文件，避免重复读）
+    const metaBatch = missing.slice(batchSize, batchSize * 3);
+    if (metaBatch.length > 0) void loadMetaForBatch(metaBatch);
+
     timerRef.current = setTimeout(() => {
       void loadWaveformBatch(batch, miniWaveformJobIdRef.current, setMiniWaveforms);
     }, delayMs);
@@ -142,19 +152,17 @@ export function useMiniWaveformPreload(options: {
 
     const jobId = ++miniWaveformJobIdRef.current;
 
-    // Level 1：可见文件——先扫元数据（duration），再跑波形
+    // Level 1：可见文件 — waveform 返回结果已包含 duration，无需单独调 getAudioMeta
     const visibleFiles = missingFiles.slice(0, visibleCount);
     if (visibleFiles.length > 0) {
-      void loadMetaForBatch(visibleFiles);
       loadWaveformBatch(visibleFiles, jobId, setMiniWaveforms);
     }
 
-    // Level 2：后台文件——延迟后再来
+    // Level 2：后台文件 — 延迟后再来
     const deferredFiles = missingFiles.slice(visibleCount);
     if (deferredFiles.length > 0) {
       deferredTimerRef.current = setTimeout(() => {
         if (jobId !== miniWaveformJobIdRef.current) return;
-        void loadMetaForBatch(deferredFiles);
         loadWaveformBatch(deferredFiles, jobId, setMiniWaveforms);
       }, 100);
     }

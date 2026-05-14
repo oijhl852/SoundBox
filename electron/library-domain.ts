@@ -8,7 +8,7 @@ import type {
 } from "../src/lib/types.js";
 import type { createLibraryStorage } from "./library-storage.js";
 
-const AUDIO_EXTENSIONS = new Set([".wav", ".mp3", ".m4a"]);
+export const AUDIO_EXTENSIONS = new Set([".wav", ".mp3", ".m4a", ".ogg", ".flac", ".aac"]);
 
 type LibraryStorage = ReturnType<typeof createLibraryStorage>;
 
