@@ -2,6 +2,7 @@ import { app, type IpcMain } from "electron";
 import path from "node:path";
 import { computeContentId, getAudioSource } from "./audio.js";
 import { getWaveformPeaks as getWaveformPeaksForFile } from "./ffmpeg.js";
+import { inspectAudioFile } from "./waveform-generator.js";
 import { selectFolder } from "./system.js";
 import { createLibraryService } from "./library.js";
 import { createTagService } from "./tags.js";
@@ -38,6 +39,10 @@ export function registerSoundboxIpcHandlers(ipcMain: IpcMain) {
   );
   ipcMain.handle("soundbox:remove-library", (_event, libraryPath: string) => libraryService.removeLibrary(libraryPath));
   ipcMain.handle("soundbox:get-audio-source", (_event, filePath: string) => getAudioSource(filePath));
+  ipcMain.handle("soundbox:get-audio-meta", async (_event, filePath: string) => {
+    const probe = await inspectAudioFile(filePath);
+    return { duration: probe.duration ?? 0 };
+  });
   ipcMain.handle("soundbox:get-sync-status", () => getSyncStatus());
   ipcMain.handle("soundbox:read-file-index", () => libraryService.readFileIndexFile());
   ipcMain.handle("soundbox:read-content-index", () => libraryService.readContentIndexFile());

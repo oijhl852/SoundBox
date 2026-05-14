@@ -1,21 +1,22 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { LibrarySidebar } from "@/components/LibrarySidebar";
 import { FileListPanel } from "@/components/FileListPanel";
 import { DropInspectorWindow } from "@/components/DropInspectorWindow";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { usePlayerStore, usePlayerAudioEffect, audioRef } from "@/stores/playerStore";
-import { useUiStore, useSidebarResizeEffect } from "@/stores/uiStore";
+import { useUiStore, useSidebarResizeEffect, useThemeEffect } from "@/stores/uiStore";
 import { Button } from "@/components/ui/button";
-import { Music, Settings, PanelLeft } from "lucide-react";
+import { Music, Settings, PanelLeft, Volume2 } from "lucide-react";
 
 function App() {
-  // --- 初始化素材库（启动时执行一次）---
+  // --- 初始化 ---
   useEffect(() => {
     useLibraryStore.getState().initLibraries();
   }, []);
 
   // --- 副作用 Hooks ---
+  useThemeEffect();
   usePlayerAudioEffect();
   useSidebarResizeEffect();
 
@@ -26,6 +27,17 @@ function App() {
   const showSettings = useUiStore((s) => s.showSettings);
   const setShowSettings = useUiStore((s) => s.setShowSettings);
   const setShowSidebar = useUiStore((s) => s.setShowSidebar);
+  const volume = usePlayerStore((s) => s.volume);
+  const setVolume = usePlayerStore((s) => s.setVolume);
+  const isMuted = usePlayerStore((s) => s.isMuted);
+  const toggleMute = usePlayerStore((s) => s.toggleMute);
+  const allFiles = useLibraryStore((s) => s.allFiles);
+  const miniWaveforms = useLibraryStore((s) => s.miniWaveforms);
+  const waveformTotal = allFiles.length;
+  const waveformLoaded = useMemo(
+    () => allFiles.filter((f) => miniWaveforms[f.path]?.length).length,
+    [allFiles, miniWaveforms]
+  );
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground select-none">
@@ -35,6 +47,27 @@ function App() {
         <Music className="mr-2 h-4 w-4" />
         <span>Soundbox</span>
         <div className="ml-auto flex items-center gap-2">
+          {/* 音量 */}
+          <div className="flex items-center gap-1.5 mr-1">
+            <button
+              onClick={toggleMute}
+              className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted/50 transition-colors"
+            >
+              <Volume2 className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={isMuted ? 0 : volume}
+              onChange={(e) => setVolume(parseFloat(e.target.value))}
+              className="w-16 h-1 accent-primary cursor-pointer"
+            />
+            <span className="text-[11px] text-muted-foreground w-8 text-right tabular-nums">
+              {Math.round((isMuted ? 0 : volume) * 100)}%
+            </span>
+          </div>
           <Button variant="ghost" size="sm" onClick={() => setShowSidebar(!showSidebar)}>
             <PanelLeft className="h-4 w-4" />
           </Button>
@@ -51,6 +84,14 @@ function App() {
         <div className="flex flex-1 flex-col overflow-hidden">
           <FileListPanel />
         </div>
+      </div>
+
+      {/* 底部状态栏 */}
+      <div className="flex h-6 items-center border-t px-4 text-[11px] text-muted-foreground">
+        <span className="flex items-center gap-1">
+          波形 {waveformTotal > 0 ? `${waveformLoaded}/${waveformTotal}` : ""}
+        </span>
+        <div className="ml-auto" />
       </div>
 
       {showDropInspector && (

@@ -48,6 +48,10 @@ export interface AudioSourceResponse {
   mime: string;
 }
 
+export interface AudioMetaResponse {
+  duration: number;
+}
+
 export interface WaveformResponse {
   duration: number;
   peaks: number[];

@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  AudioMetaResponse,
   AudioSourceResponse,
   ContentIndexFile,
   FileIndexFile,
@@ -30,6 +31,7 @@ declare global {
       addLibrary?: (name: string, path: string, libType: string) => Promise<void>;
       removeLibrary?: (path: string) => Promise<void>;
       getAudioSource?: (path: string) => Promise<AudioSourceResponse>;
+      getAudioMeta?: (path: string) => Promise<AudioMetaResponse>;
       getWaveformPeaks?: (path: string) => Promise<WaveformResponse>;
       getSyncStatus?: () => Promise<SyncStatus>;
       getDragDebugState?: () => Promise<DragDebugState>;

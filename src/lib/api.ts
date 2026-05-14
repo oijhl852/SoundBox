@@ -1,6 +1,7 @@
 import type {
   AppSettings,
   AudioSourceResponse,
+  AudioMetaResponse,
   ContentIndexFile,
   DragDebugState,
   FileIndexFile,
@@ -130,6 +131,12 @@ export async function removeLibrary(path: string): Promise<void> {
 export async function getAudioSource(path: string): Promise<AudioSourceResponse> {
   return callElectron("getAudioSource", (api) => {
     return requireBridgeMethod(api, "getAudioSource")(path);
+  });
+}
+
+export async function getAudioMeta(path: string): Promise<AudioMetaResponse> {
+  return callElectron("getAudioMeta", (api) => {
+    return requireBridgeMethod(api, "getAudioMeta")(path);
   });
 }
 

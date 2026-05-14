@@ -35,7 +35,7 @@ async function resolveFfprobePath() {
   return ffprobePathPromise;
 }
 
-async function inspectAudioFile(filePath: string) {
+export async function inspectAudioFile(filePath: string) {
   const ffprobePath = await resolveFfprobePath();
   return new Promise<{ codecName: string | null; duration: number | null }>((resolve, reject) => {
     const args = [

@@ -8,7 +8,7 @@ import {
   setPlaybackMuted,
   setPlaybackVolume,
 } from "@/lib/player-state";
-import { createAudioElementBindings } from "@/lib/audio-element-effects";
+import { createAudioElementBindings, seekOnLoadPct } from "@/lib/audio-element-effects";
 import {
   buildWaveformReadyState,
   buildWaveformErrorState,
@@ -76,6 +76,21 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
       currentTime: nextSelection.playerState.currentTime,
       duration: nextSelection.playerState.duration,
     });
+    // 立即加载音频，不等 waveform 分析
+    const audio = audioRef.current;
+    if (audio) {
+      // 加时间戳确保浏览器每次都触发 loadedmetadata（相同文件点波形时）
+      const ts = seekOnLoadPct.current !== null ? `?t=${Date.now()}` : "";
+      const srcPath = `local-audio:///${path.replaceAll("\\", "/")}${ts}`;
+      audio.pause();
+      audio.src = srcPath;
+      audio.load();
+      // 如果有等待定位，loadedmetadata 时会 seek 并 play，这里不 play
+      // 否则从开头播放
+      if (seekOnLoadPct.current === null) {
+        audio.play().catch(() => {});
+      }
+    }
     return nextSelection;
   },
 
@@ -85,8 +100,11 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
     const nextAction = buildPlaybackToggleResult(get().isPlaying);
     if (nextAction.shouldPause) { audio.pause(); return; }
     if (nextAction.shouldPlay) {
-      if (!audio.src) return;  // 还没有加载音频源
-      audio.play().catch((err) => logError("播放失败", err));
+      if (!audio.src) return;
+      audio.play().catch((err) => {
+        // AbortError = 被新文件加载打断，正常行为，不记录
+        if (err.name !== "AbortError") logError("播放失败", err);
+      });
     }
   },
 

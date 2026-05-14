@@ -21,12 +21,9 @@ export async function loadPlayerWaveform(options: {
     getWaveformPeaks,
     isCurrentJob,
     jobId,
-    setAudioSource: async (sourcePath: string) => {
-      if (!audioRef.current) return;
-      if (!isCurrentJob(jobId)) return;
-      audioRef.current.src = sourcePath;
-      audioRef.current.load();
-      await audioRef.current.play().catch(() => {});
+    setAudioSource: async (_sourcePath: string) => {
+      // selectFile 已经设置了 src 并开始播放
+      // 这里什么都不做，只等 waveform 分析完成后 onReady
     },
     onReady: (waveformDuration: number) => {
       if (!isCurrentJob(jobId)) return;

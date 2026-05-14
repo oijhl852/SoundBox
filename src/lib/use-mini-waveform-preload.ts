@@ -1,22 +1,41 @@
 import { useEffect, useRef } from "react";
-import { getWaveformPeaks } from "./api";
+import { getWaveformPeaks, getAudioMeta } from "./api";
 import { getMissingMiniWaveformFiles } from "./app-shell-actions";
 import { logError } from "./logger";
 import { mergeMiniWaveforms } from "./app-effects";
 import { fileDurationCache } from "@/stores/playerStore";
 import type { FileMeta, MiniWaveformMap } from "./types";
 
+// ── 模块级计数器 ──
+let urgentJobId = 0;
+const miniWaveformJobIdRef = { current: 0 };
+
+async function loadMetaForBatch(files: FileMeta[]) {
+  await Promise.all(
+    files.map(async (file) => {
+      if (fileDurationCache[file.path] !== undefined) return;
+      try {
+        const meta = await getAudioMeta(file.path);
+        if (meta.duration > 0) fileDurationCache[file.path] = meta.duration;
+      } catch {
+        // 静默失败，波形预载时还会再试
+      }
+    })
+  );
+}
+
 async function loadWaveformBatch(
   files: FileMeta[],
   jobId: number,
-  miniWaveformJobIdRef: React.MutableRefObject<number>,
   setMiniWaveforms: (updater: MiniWaveformMap | ((prev: MiniWaveformMap) => MiniWaveformMap)) => void
 ) {
+  // 先批量拉元数据（ffprobe，极快），确保 duration 就绪
+  await loadMetaForBatch(files);
+
   const results = await Promise.all(
     files.map(async (file) => {
       try {
         const waveform = await getWaveformPeaks(file.path);
-        // 顺手缓存 duration
         if (waveform.duration > 0) fileDurationCache[file.path] = waveform.duration;
         return [file.path, waveform.peaks] as const;
       } catch (error) {
@@ -27,11 +46,82 @@ async function loadWaveformBatch(
   );
 
   if (jobId !== miniWaveformJobIdRef.current) return;
+  if (jobId < urgentJobId) return;
   const entries = results.filter((result): result is readonly [string, number[]] => Boolean(result));
   if (entries.length === 0) return;
   setMiniWaveforms((prev) => mergeMiniWaveforms(prev, entries));
 }
 
+// ── 紧急预载 ──
+export async function preloadSingleFile(
+  filePath: string,
+  miniWaveforms: MiniWaveformMap,
+  setMiniWaveforms: (updater: MiniWaveformMap | ((prev: MiniWaveformMap) => MiniWaveformMap)) => void
+) {
+  if (miniWaveforms[filePath]?.length) return;
+  urgentJobId++;
+
+  // 先确保 duration 就绪
+  if (fileDurationCache[filePath] === undefined) {
+    try {
+      const meta = await getAudioMeta(filePath);
+      if (meta.duration > 0) fileDurationCache[filePath] = meta.duration;
+    } catch {}
+  }
+
+  try {
+    const waveform = await getWaveformPeaks(filePath);
+    if (waveform.duration > 0) fileDurationCache[filePath] = waveform.duration;
+    setMiniWaveforms((prev) => {
+      if (prev[filePath]?.length) return prev;
+      return { ...prev, [filePath]: waveform.peaks };
+    });
+  } catch (error) {
+    logError("Urgent waveform load failed:", { path: filePath, error });
+  }
+}
+
+// ── 预载进度 ──
+export function useWaveformProgress(
+  allFiles: FileMeta[],
+  miniWaveforms: MiniWaveformMap
+): { loaded: number; total: number } {
+  const loaded = allFiles.filter((f) => miniWaveforms[f.path]?.length).length;
+  return { loaded, total: allFiles.length };
+}
+
+// ── Level 3：整库后台预载 ──
+export function useBackgroundWaveformPreload(options: {
+  allFiles: FileMeta[];
+  miniWaveforms: MiniWaveformMap;
+  setMiniWaveforms: (updater: MiniWaveformMap | ((prev: MiniWaveformMap) => MiniWaveformMap)) => void;
+  batchSize?: number;
+  delayMs?: number;
+}) {
+  const { allFiles, miniWaveforms, setMiniWaveforms, batchSize = 20, delayMs = 500 } = options;
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const missing = allFiles.filter((f) => !miniWaveforms[f.path]?.length);
+    if (missing.length === 0) return;
+
+    // 先扫一批元数据，让 duration 尽快就绪
+    const metaBatch = missing.slice(0, batchSize * 3);
+    void loadMetaForBatch(metaBatch);
+
+    const batch = missing.slice(0, batchSize);
+    timerRef.current = setTimeout(() => {
+      void loadWaveformBatch(batch, miniWaveformJobIdRef.current, setMiniWaveforms);
+    }, delayMs);
+
+    return () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allFiles, miniWaveforms]);
+}
+
+// ── 主预载 Hook ──
 export function useMiniWaveformPreload(options: {
   filteredFiles: FileMeta[];
   miniWaveforms: MiniWaveformMap;
@@ -39,7 +129,6 @@ export function useMiniWaveformPreload(options: {
   visibleCount?: number;
 }) {
   const { filteredFiles, miniWaveforms, setMiniWaveforms, visibleCount = 15 } = options;
-  const miniWaveformJobIdRef = useRef(0);
   const deferredTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -55,16 +144,18 @@ export function useMiniWaveformPreload(options: {
 
     const jobId = ++miniWaveformJobIdRef.current;
 
+    // Level 1：可见文件（立即）
     const visibleFiles = missingFiles.slice(0, visibleCount);
     if (visibleFiles.length > 0) {
-      loadWaveformBatch(visibleFiles, jobId, miniWaveformJobIdRef, setMiniWaveforms);
+      loadWaveformBatch(visibleFiles, jobId, setMiniWaveforms);
     }
 
+    // Level 2：后台文件（延迟）
     const deferredFiles = missingFiles.slice(visibleCount);
     if (deferredFiles.length > 0) {
       deferredTimerRef.current = setTimeout(() => {
         if (jobId !== miniWaveformJobIdRef.current) return;
-        loadWaveformBatch(deferredFiles, jobId, miniWaveformJobIdRef, setMiniWaveforms);
+        loadWaveformBatch(deferredFiles, jobId, setMiniWaveforms);
       }, 100);
     }
 

@@ -7,10 +7,11 @@ import { List } from "react-window";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { usePlayerStore, fileDurationCache } from "@/stores/playerStore";
 import { useTagStore } from "@/stores/tagStore";
+import { seekOnLoadPct } from "@/lib/audio-element-effects";
 import { useUiStore } from "@/stores/uiStore";
 import { collectFilesForFolder } from "@/lib/file-list-state";
 import { buildFilteredFiles } from "@/lib/file-filtering";
-import { useMiniWaveformPreload } from "@/lib/use-mini-waveform-preload";
+import { useMiniWaveformPreload, useBackgroundWaveformPreload, preloadSingleFile } from "@/lib/use-mini-waveform-preload";
 import { TAG_GROUPS } from "@/lib/app-constants";
 import { dragOutFile } from "@/lib/api";
 import type { MiniWaveformMap, FileMeta, TagEntry } from "@/lib/types";
@@ -42,13 +43,12 @@ const TableMiniWaveform = memo(function TableMiniWaveform({
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
     const mid = ch / 2;
-    const bg = active ? "rgba(99,102,241,0.12)" : "rgba(100,116,139,0.08)";
-    const sc = active ? "#6366f1" : "rgba(100,116,139,0.5)";
+    const s = getComputedStyle(document.documentElement);
+    const sc = s.getPropertyValue(active ? "--waveform-active-line" : "--waveform-line").trim();
+    const pg = s.getPropertyValue("--waveform-progress").trim();
     const step = peaks.length / cw;
     ctx.clearRect(0, 0, cw, ch);
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, cw, ch);
-    ctx.strokeStyle = sc;
+    ctx.strokeStyle = sc || (active ? "#6366f1" : "rgba(100,116,139,0.5)");
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let x = 0; x < cw; x++) {
@@ -63,7 +63,7 @@ const TableMiniWaveform = memo(function TableMiniWaveform({
     ctx.stroke();
     if (progress !== null) {
       const cx = Math.min(1, Math.max(0, progress)) * cw;
-      ctx.strokeStyle = "#ef4444";
+      ctx.strokeStyle = pg || "#ef4444";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(cx + 0.5, 0);
@@ -72,9 +72,9 @@ const TableMiniWaveform = memo(function TableMiniWaveform({
     }
   }, [peaks, active, progress, resizeKey]);
 
-  if (!peaks?.length) return <div className="h-5 rounded bg-muted/20" />;
+  if (!peaks?.length) return <div className="h-5 rounded" />;
   return (
-    <div className={`h-5 w-full rounded overflow-hidden ${active ? "bg-primary/5" : "bg-muted/10"}`}>
+    <div className="h-5 w-full rounded overflow-hidden">
       <canvas ref={canvasRef} className="block h-full w-full" />
     </div>
   );
@@ -103,6 +103,8 @@ function Row({
   const progress = active && duration > 0 ? currentTime / duration : null;
 
   const handleRowClick = () => {
+    // 行点击 = 从开头播放，清除任何等待的波形定位
+    seekOnLoadPct.current = null;
     if (active) {
       usePlayerStore.getState().togglePlay();
     } else {
@@ -128,7 +130,7 @@ function Row({
           dragOutFile(file.path);
         }}
         className={`flex items-center h-[44px] rounded px-2 gap-0 cursor-pointer transition-colors text-sm ${
-          active ? "bg-accent border border-primary/30" : "hover:bg-accent/40 border border-transparent"
+          active ? "bg-primary/[0.06] border border-primary/20" : "hover:bg-muted/30 border border-transparent"
         }`}
       >
         {/* 列1：文件名 */}
@@ -137,21 +139,29 @@ function Row({
           <span className="truncate text-sm">{file.name}</span>
         </div>
 
-        {/* 列2：波形（点击播放） */}
+        {/* 列2：波形（点击定位播放） */}
         <div className="min-w-0 flex-1" onClick={(e) => {
           e.stopPropagation();
           const state = usePlayerStore.getState();
           const rect = e.currentTarget.getBoundingClientRect();
           const seekPct = (e.clientX - rect.left) / rect.width;
-          // 从两个来源取 duration：缓存（迷你波形预加载/波形分析）或 store（已播放过）
-          const dur = fileDurationCache[file.path] ?? state.duration;
-          if (state.currentFile?.path === file.path && dur > 0) {
-            state.seekToPercent(seekPct);
+          // 如果这个文件还没有波形，触发紧急预载（Level 0）
+          const miniWaveforms = useLibraryStore.getState().miniWaveforms;
+          const setMiniWaveforms = useLibraryStore.getState().setMiniWaveforms;
+          if (!miniWaveforms[file.path]?.length) {
+            preloadSingleFile(file.path, miniWaveforms, setMiniWaveforms);
           }
-          if (state.currentFile?.path !== file.path) {
+          // 优先从缓存取 duration（预载器已存好），保底用 store 中上次播放的值
+          const dur = fileDurationCache[file.path] ?? state.duration;
+          if (state.currentFile?.path === file.path) {
+            // 同一文件：直接定位，不需要重新加载
+            seekOnLoadPct.current = null;
+            if (dur > 0) state.seekToPercent(seekPct);
+            if (!state.isPlaying) state.togglePlay();
+          } else {
+            // 不同文件：靠 selectFile + loadedmetadata 定位
+            seekOnLoadPct.current = seekPct;
             state.selectFile(file.name, file.path);
-          } else if (!state.isPlaying) {
-            state.togglePlay();
           }
         }}>
           <TableMiniWaveform
@@ -308,6 +318,7 @@ export function FileListPanel() {
   }, [folderTree, selectedFolderPath, contentIndex, libTags, nameSuggestions, searchQuery, tagFilters]);
 
   useMiniWaveformPreload({ filteredFiles, miniWaveforms, setMiniWaveforms });
+  useBackgroundWaveformPreload({ allFiles: useLibraryStore.getState().allFiles, miniWaveforms, setMiniWaveforms });
 
   const rowData: FileRowData = {
     files: filteredFiles, currentFilePath, tagsByPath: libTags,

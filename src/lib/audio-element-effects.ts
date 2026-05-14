@@ -2,6 +2,9 @@ import type { PlayerState } from "@/lib/player-state";
 import { buildEndedPlayerState, buildWaveformErrorState, buildWaveformReadyState } from "@/lib/player-controller-state";
 import { setPlaybackActive, setPlaybackTime } from "@/lib/player-state";
 
+// 模块级：波形点击时写入，loadedmetadata 时消费
+export const seekOnLoadPct = { current: null as number | null };
+
 export function createAudioElementBindings(options: {
   audio: HTMLAudioElement;
   requestAnimationFrameImpl: typeof requestAnimationFrame;
@@ -27,6 +30,17 @@ export function createAudioElementBindings(options: {
 
   const onLoadedMetadata = () => {
     setPlayerState((prev) => buildWaveformReadyState(prev, audio.duration));
+    // 有等待定位？立刻跳转并播放
+    const pct = seekOnLoadPct.current;
+    const dur = audio.duration;
+    if (pct !== null && isFinite(pct) && isFinite(dur) && dur > 0) {
+      seekOnLoadPct.current = null;
+      const seekTime = pct * dur;
+      if (isFinite(seekTime)) {
+        audio.currentTime = seekTime;
+        audio.play().catch(() => {});
+      }
+    }
   };
   const onTimeUpdate = () => setPlayerState((prev) => setPlaybackTime(prev, audio.currentTime));
   const onPlay = () => {

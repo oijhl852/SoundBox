@@ -32,6 +32,7 @@ const soundbox = {
   addLibrary: (name: string, path: string, libType: string) => ipcRenderer.invoke("soundbox:add-library", name, path, libType),
   removeLibrary: (path: string) => ipcRenderer.invoke("soundbox:remove-library", path),
   getAudioSource: (path: string) => ipcRenderer.invoke("soundbox:get-audio-source", path),
+  getAudioMeta: (path: string) => ipcRenderer.invoke("soundbox:get-audio-meta", path),
   getWaveformPeaks: (path: string) => ipcRenderer.invoke("soundbox:get-waveform-peaks", path),
   getSyncStatus: () => ipcRenderer.invoke("soundbox:get-sync-status"),
   getDragDebugState: (): Promise<DragDebugState> => ipcRenderer.invoke("soundbox:get-drag-debug-state"),

@@ -199,20 +199,18 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
   },
 
   handleAddLibrary: async () => {
-    const { newLibName, newLibType, libraries, activeLibrary, libraryLoadState } = get();
-    if (!newLibName.trim()) {
-      alert("请输入素材库名称");
-      return false;
-    }
-
-    // 调用 Electron 的选择文件夹对话框
+    const { libraries, activeLibrary, libraryLoadState } = get();
     const { selectFolder } = await import("@/lib/api");
     const path = await selectFolder();
     if (!path) return false;
 
+    // 从文件夹名自动推断素材库名称
+    const segments = path.replace(/\\/g, "/").split("/").filter(Boolean);
+    const folderName = segments[segments.length - 1] || "未命名素材库";
+
     try {
       const { addLibrary, loadSettings } = await import("@/lib/api");
-      await addLibrary(newLibName, path, newLibType);
+      await addLibrary(folderName, path, "music");
       const settings = await loadSettings();
 
       const controllerState = buildLibraryControllerState({ libraries, activeLibrary, libraryLoadState });
@@ -230,7 +228,6 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
       await get().selectLibrary(path);
       return true;
     } catch (e) {
-      alert("添加素材库失败: " + e);
       return false;
     }
   },
