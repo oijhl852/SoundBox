@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { Input } from "@/components/ui/input";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { LibrarySidebar } from "@/components/LibrarySidebar";
 import { FileListPanel } from "@/components/FileListPanel";
@@ -7,7 +8,7 @@ import { useLibraryStore } from "@/stores/libraryStore";
 import { usePlayerStore, usePlayerAudioEffect, audioRef } from "@/stores/playerStore";
 import { useUiStore, useSidebarResizeEffect, useThemeEffect } from "@/stores/uiStore";
 import { Button } from "@/components/ui/button";
-import { Music, Settings, PanelLeft, Volume2 } from "lucide-react";
+import { Music, Settings, PanelLeft, Volume2, Search } from "lucide-react";
 
 function App() {
   // --- 初始化 ---
@@ -34,6 +35,8 @@ function App() {
   const allFiles = useLibraryStore((s) => s.allFiles);
   const miniWaveforms = useLibraryStore((s) => s.miniWaveforms);
   const waveformTotal = allFiles.length;
+  const searchQuery = useUiStore((s) => s.searchQuery);
+  const setSearchQuery = useUiStore((s) => s.setSearchQuery);
   const waveformLoaded = useMemo(
     () => allFiles.filter((f) => miniWaveforms[f.path]?.length).length,
     [allFiles, miniWaveforms]
@@ -43,9 +46,19 @@ function App() {
     <div className="flex h-screen flex-col bg-background text-foreground select-none">
       <audio ref={audioRef as React.RefObject<HTMLAudioElement>} preload="metadata" />
 
-      <header className="flex h-10 items-center border-b px-4 text-sm font-medium">
-        <Music className="mr-2 h-4 w-4" />
-        <span>Soundbox</span>
+      <header className="flex h-10 items-center border-b px-4 text-sm font-medium gap-3">
+        <Music className="h-4 w-4 shrink-0" />
+        <span className="shrink-0">Soundbox</span>
+        {/* 全局搜索 */}
+        <div className="flex items-center gap-1.5 flex-1 max-w-xs">
+          <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <Input
+            placeholder="搜索文件名、标签或氛围..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-7 text-xs flex-1"
+          />
+        </div>
         <div className="ml-auto flex items-center gap-2">
           {/* 音量 */}
           <div className="flex items-center gap-1.5 mr-1">

@@ -24,9 +24,8 @@ describe("FileListPanel", () => {
   });
 
   it("renders empty state when there are no files", () => {
-    render(<FileListPanel onSelectFile={vi.fn()} />);
+    render(<FileListPanel />);
 
-    expect(screen.getByPlaceholderText("搜索文件名、标签或氛围...")).toBeInTheDocument();
     expect(screen.getByText("未找到匹配的素材")).toBeInTheDocument();
   });
 

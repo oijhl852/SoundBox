@@ -1,7 +1,6 @@
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, FileAudio, X, Tag } from "lucide-react";
+import { FileAudio, X, Tag, Search } from "lucide-react";
 import { useCallback, memo, useMemo, useState, useRef, useEffect } from "react";
 import { List } from "react-window";
 import { useLibraryStore } from "@/stores/libraryStore";
@@ -259,7 +258,6 @@ export function FileListPanel() {
   const librariesCount = useLibraryStore((s) => s.libraries.length);
   const libraryLoadStateStatus = useLibraryStore((s) => s.libraryLoadState.status);
   const searchQuery = useUiStore((s) => s.searchQuery);
-  const setSearchQuery = useUiStore((s) => s.setSearchQuery);
   const currentFilePath = usePlayerStore((s) => s.currentFile?.path ?? null);
   const currentTime = usePlayerStore((s) => s.currentTime);
   const duration = usePlayerStore((s) => s.duration);
@@ -328,26 +326,6 @@ export function FileListPanel() {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      {/* 搜索栏 */}
-      <div className="flex items-center gap-2 border-b px-4 py-2 bg-background/80 backdrop-blur-sm">
-        <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-        <Input
-          placeholder="搜索文件名、标签或氛围..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-8 flex-1"
-        />
-        <Button
-          variant="ghost" size="sm"
-          className={`h-8 gap-1 shrink-0 ${currentFile ? "text-foreground" : "text-muted-foreground"}`}
-          disabled={!currentFile}
-          onClick={() => setShowTagEditor(!showTagEditor)}
-        >
-          <Tag className="h-3.5 w-3.5" />
-          <span className="text-xs">标签</span>
-        </Button>
-      </div>
-
       {/* 标签编辑器（正常流布局，不重叠） */}
       {showTagEditor && <TagEditorPopup onClose={() => setShowTagEditor(false)} />}
 
@@ -369,7 +347,17 @@ export function FileListPanel() {
               <DragHandle onResizeStart={(e) => { dragRef.current = { col: "name", startX: e.clientX, startW: colWidths.name }; }} />
               <span className="flex-1 px-1">波形</span>
               <DragHandle onResizeStart={(e) => { dragRef.current = { col: "tags", startX: e.clientX, startW: colWidths.tags }; }} />
-              <span className="shrink-0" style={{ width: colWidths.tags }}>标签</span>
+              <span className="shrink-0 flex items-center gap-1" style={{ width: colWidths.tags }}>
+                标签
+                {currentFile && (
+                  <button
+                    onClick={() => setShowTagEditor(!showTagEditor)}
+                    className="ml-0.5 p-0.5 rounded hover:bg-muted/50 transition-colors"
+                  >
+                    <Tag className="h-3 w-3" />
+                  </button>
+                )}
+              </span>
             </div>
             <List
               className="px-0 py-0"
