@@ -7,7 +7,7 @@ import { selectFolder } from "./system.js";
 import { createLibraryService } from "./library.js";
 import { createTagService } from "./tags.js";
 import { createDragDebugStore, registerDragOutHandler } from "./protocols.js";
-import type { AppSettings } from "../src/lib/types.js";
+import type { AppSettings, WaveformResponse } from "../src/lib/types.js";
 
 function getAppDataDir() {
   return path.join(app.getPath("appData"), "Soundbox");
@@ -39,9 +39,17 @@ export function registerSoundboxIpcHandlers(ipcMain: IpcMain) {
   );
   ipcMain.handle("soundbox:remove-library", (_event, libraryPath: string) => libraryService.removeLibrary(libraryPath));
   ipcMain.handle("soundbox:get-audio-source", (_event, filePath: string) => getAudioSource(filePath));
+  // 飞行中元数据请求去重
+  const inflightAudioMeta = new Map<string, Promise<{ duration: number }>>();
   ipcMain.handle("soundbox:get-audio-meta", async (_event, filePath: string) => {
-    const probe = await inspectAudioFile(filePath);
-    return { duration: probe.duration ?? 0 };
+    const existing = inflightAudioMeta.get(filePath);
+    if (existing) return existing;
+    const job = inspectAudioFile(filePath).then(
+      (probe) => ({ duration: probe.duration ?? 0 }),
+      () => ({ duration: 0 })
+    ).finally(() => inflightAudioMeta.delete(filePath));
+    inflightAudioMeta.set(filePath, job);
+    return job;
   });
   ipcMain.handle("soundbox:get-sync-status", () => getSyncStatus());
   ipcMain.handle("soundbox:read-file-index", () => libraryService.readFileIndexFile());
@@ -56,9 +64,17 @@ export function registerSoundboxIpcHandlers(ipcMain: IpcMain) {
   ipcMain.handle("soundbox:remove-tag", (_event, contentId: string, group: string, value: string) =>
     tagService.removeTag(contentId, group, value)
   );
-  ipcMain.handle("soundbox:get-waveform-peaks", (_event, filePath: string) =>
-    getWaveformPeaksForFile((name) => app.getPath(name), computeContentId, filePath)
-  );
+  // 飞行中波形请求去重（按文件路径，避免 computeContentId 前重复）
+  const inflightWaveformByPath = new Map<string, Promise<WaveformResponse>>();
+  ipcMain.handle("soundbox:get-waveform-peaks", (_event, filePath: string) => {
+    const existing = inflightWaveformByPath.get(filePath);
+    if (existing) return existing;
+    const job = getWaveformPeaksForFile(
+      (name) => app.getPath(name), computeContentId, filePath
+    ).finally(() => inflightWaveformByPath.delete(filePath));
+    inflightWaveformByPath.set(filePath, job);
+    return job;
+  });
   ipcMain.handle("soundbox:get-drag-debug-state", () => dragDebugStore.getDragDebugState());
   registerDragOutHandler(ipcMain, dragDebugStore);
 }

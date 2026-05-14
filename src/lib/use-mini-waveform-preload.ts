@@ -2,26 +2,28 @@ import { useEffect, useRef } from "react";
 import { getWaveformPeaks, getAudioMeta } from "./api";
 import { getMissingMiniWaveformFiles } from "./app-shell-actions";
 import { logError } from "./logger";
-import { mergeMiniWaveforms } from "./app-effects";
+import { mergeMiniWaveforms, asyncMapConcurrent } from "./app-effects";
 import { fileDurationCache } from "@/stores/playerStore";
 import type { FileMeta, MiniWaveformMap } from "./types";
+
+const FFMPEG_CONCURRENCY = 3;  // 同时最多 3 个 ffmpeg
+const FFPROBE_CONCURRENCY = 4; // 同时最多 4 个 ffprobe
 
 // ── 模块级计数器 ──
 let urgentJobId = 0;
 const miniWaveformJobIdRef = { current: 0 };
 
 async function loadMetaForBatch(files: FileMeta[]) {
-  await Promise.all(
-    files.map(async (file) => {
-      if (fileDurationCache[file.path] !== undefined) return;
-      try {
-        const meta = await getAudioMeta(file.path);
-        if (meta.duration > 0) fileDurationCache[file.path] = meta.duration;
-      } catch {
-        // 静默失败，波形预载时还会再试
-      }
-    })
-  );
+  const need = files.filter((f) => fileDurationCache[f.path] === undefined);
+  if (need.length === 0) return;
+  await asyncMapConcurrent(need, FFPROBE_CONCURRENCY, async (file) => {
+    try {
+      const meta = await getAudioMeta(file.path);
+      if (meta.duration > 0) fileDurationCache[file.path] = meta.duration;
+    } catch {
+      // 静默失败，波形预载时还会再试
+    }
+  });
 }
 
 async function loadWaveformBatch(
@@ -32,18 +34,16 @@ async function loadWaveformBatch(
   // 先批量拉元数据（ffprobe，极快），确保 duration 就绪
   await loadMetaForBatch(files);
 
-  const results = await Promise.all(
-    files.map(async (file) => {
-      try {
-        const waveform = await getWaveformPeaks(file.path);
-        if (waveform.duration > 0) fileDurationCache[file.path] = waveform.duration;
-        return [file.path, waveform.peaks] as const;
-      } catch (error) {
-        logError("Mini waveform load failed:", { path: file.path, error });
-        return null;
-      }
-    })
-  );
+  const results = await asyncMapConcurrent(files, FFMPEG_CONCURRENCY, async (file) => {
+    try {
+      const waveform = await getWaveformPeaks(file.path);
+      if (waveform.duration > 0) fileDurationCache[file.path] = waveform.duration;
+      return [file.path, waveform.peaks] as const;
+    } catch (error) {
+      logError("Mini waveform load failed:", { path: file.path, error });
+      return null;
+    }
+  });
 
   if (jobId !== miniWaveformJobIdRef.current) return;
   if (jobId < urgentJobId) return;
