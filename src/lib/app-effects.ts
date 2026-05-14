@@ -1,26 +1,6 @@
 import { shouldAutoplayNextSource } from "@/lib/player-actions";
 import type { DragDebugState, LibraryLoadState, LibrarySnapshot, MiniWaveformMap } from "@/lib/types";
 
-/** 并发限制器：同时最多跑 concurrency 个异步任务 */
-export async function asyncMapConcurrent<T, R>(
-  items: T[],
-  concurrency: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = [];
-  const queue = [...items];
-  const startWorker = async () => {
-    while (queue.length > 0) {
-      const item = queue.shift()!;
-      const idx = items.indexOf(item);
-      results[idx] = await fn(item);
-    }
-  };
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => startWorker());
-  await Promise.all(workers);
-  return results;
-}
-
 export function createDragStatePoller(options: {
   fetchState: () => Promise<DragDebugState>;
   onState: (state: DragDebugState | null) => void;

@@ -2,28 +2,26 @@ import { useEffect, useRef } from "react";
 import { getWaveformPeaks, getAudioMeta } from "./api";
 import { getMissingMiniWaveformFiles } from "./app-shell-actions";
 import { logError } from "./logger";
-import { mergeMiniWaveforms, asyncMapConcurrent } from "./app-effects";
+import { mergeMiniWaveforms } from "./app-effects";
 import { fileDurationCache } from "@/stores/playerStore";
 import type { FileMeta, MiniWaveformMap } from "./types";
-
-const FFMPEG_CONCURRENCY = 3;  // 同时最多 3 个 ffmpeg
-const FFPROBE_CONCURRENCY = 4; // 同时最多 4 个 ffprobe
 
 // ── 模块级计数器 ──
 let urgentJobId = 0;
 const miniWaveformJobIdRef = { current: 0 };
 
 async function loadMetaForBatch(files: FileMeta[]) {
-  const need = files.filter((f) => fileDurationCache[f.path] === undefined);
-  if (need.length === 0) return;
-  await asyncMapConcurrent(need, FFPROBE_CONCURRENCY, async (file) => {
-    try {
-      const meta = await getAudioMeta(file.path);
-      if (meta.duration > 0) fileDurationCache[file.path] = meta.duration;
-    } catch {
-      // 静默失败，波形预载时还会再试
-    }
-  });
+  await Promise.all(
+    files.map(async (file) => {
+      if (fileDurationCache[file.path] !== undefined) return;
+      try {
+        const meta = await getAudioMeta(file.path);
+        if (meta.duration > 0) fileDurationCache[file.path] = meta.duration;
+      } catch {
+        // 静默失败，波形分析时也会顺便拿到 duration
+      }
+    })
+  );
 }
 
 async function loadWaveformBatch(
@@ -31,19 +29,19 @@ async function loadWaveformBatch(
   jobId: number,
   setMiniWaveforms: (updater: MiniWaveformMap | ((prev: MiniWaveformMap) => MiniWaveformMap)) => void
 ) {
-  // 先批量拉元数据（ffprobe，极快），确保 duration 就绪
-  await loadMetaForBatch(files);
-
-  const results = await asyncMapConcurrent(files, FFMPEG_CONCURRENCY, async (file) => {
-    try {
-      const waveform = await getWaveformPeaks(file.path);
-      if (waveform.duration > 0) fileDurationCache[file.path] = waveform.duration;
-      return [file.path, waveform.peaks] as const;
-    } catch (error) {
-      logError("Mini waveform load failed:", { path: file.path, error });
-      return null;
-    }
-  });
+  // 不在这里调 loadMetaForBatch——波形分析内部也会跑 ffprobe，避免重复
+  const results = await Promise.all(
+    files.map(async (file) => {
+      try {
+        const waveform = await getWaveformPeaks(file.path);
+        if (waveform.duration > 0) fileDurationCache[file.path] = waveform.duration;
+        return [file.path, waveform.peaks] as const;
+      } catch (error) {
+        logError("Mini waveform load failed:", { path: file.path, error });
+        return null;
+      }
+    })
+  );
 
   if (jobId !== miniWaveformJobIdRef.current) return;
   if (jobId < urgentJobId) return;
@@ -61,7 +59,7 @@ export async function preloadSingleFile(
   if (miniWaveforms[filePath]?.length) return;
   urgentJobId++;
 
-  // 先确保 duration 就绪
+  // 紧急情况下先确保 duration 就绪
   if (fileDurationCache[filePath] === undefined) {
     try {
       const meta = await getAudioMeta(filePath);
@@ -121,7 +119,7 @@ export function useBackgroundWaveformPreload(options: {
   }, [allFiles, miniWaveforms]);
 }
 
-// ── 主预载 Hook ──
+// ── Level 1 + Level 2：当前文件夹预载 ──
 export function useMiniWaveformPreload(options: {
   filteredFiles: FileMeta[];
   miniWaveforms: MiniWaveformMap;
@@ -144,17 +142,19 @@ export function useMiniWaveformPreload(options: {
 
     const jobId = ++miniWaveformJobIdRef.current;
 
-    // Level 1：可见文件（立即）
+    // Level 1：可见文件——先扫元数据（duration），再跑波形
     const visibleFiles = missingFiles.slice(0, visibleCount);
     if (visibleFiles.length > 0) {
+      void loadMetaForBatch(visibleFiles);
       loadWaveformBatch(visibleFiles, jobId, setMiniWaveforms);
     }
 
-    // Level 2：后台文件（延迟）
+    // Level 2：后台文件——延迟后再来
     const deferredFiles = missingFiles.slice(visibleCount);
     if (deferredFiles.length > 0) {
       deferredTimerRef.current = setTimeout(() => {
         if (jobId !== miniWaveformJobIdRef.current) return;
+        void loadMetaForBatch(deferredFiles);
         loadWaveformBatch(deferredFiles, jobId, setMiniWaveforms);
       }, 100);
     }
