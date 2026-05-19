@@ -36,6 +36,15 @@ export function createDragDebugStore() {
   };
 }
 
+function parseRange(header: string, fileSize: number) {
+  const match = header.match(/bytes=(\d+)-(\d*)/);
+  if (!match) return null;
+  const start = parseInt(match[1], 10);
+  const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+  if (start >= fileSize || end >= fileSize || start > end) return null;
+  return { start, end };
+}
+
 export function registerLocalAudioProtocol(protocol: Protocol) {
   protocol.handle("local-audio", async (request) => {
     try {
@@ -43,10 +52,40 @@ export function registerLocalAudioProtocol(protocol: Protocol) {
       const pathname = decodeURIComponent(url.pathname);
       const normalizedPath = /^\/[A-Za-z]:/.test(pathname) ? pathname.slice(1) : pathname;
       const filePath = path.normalize(`${url.hostname}${normalizedPath}`);
+      const fileSize = (await fs.stat(filePath)).size;
+      const mime = guessAudioMime(filePath);
+      const rangeHeader = request.headers.get("Range");
+
+      if (rangeHeader) {
+        const range = parseRange(rangeHeader, fileSize);
+        if (range) {
+          const { start, end } = range;
+          const length = end - start + 1;
+          const buffer = Buffer.alloc(length);
+          const fd = await fs.open(filePath, "r");
+          try {
+            await fd.read(buffer, 0, length, start);
+          } finally {
+            await fd.close();
+          }
+          return new Response(buffer, {
+            status: 206,
+            headers: {
+              "Content-Type": mime,
+              "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+              "Content-Length": String(length),
+              "Accept-Ranges": "bytes",
+            },
+          });
+        }
+      }
+
       const data = await fs.readFile(filePath);
       return new Response(data, {
         headers: {
-          "Content-Type": guessAudioMime(filePath),
+          "Content-Type": mime,
+          "Content-Length": String(fileSize),
+          "Accept-Ranges": "bytes",
         },
       });
     } catch (error) {

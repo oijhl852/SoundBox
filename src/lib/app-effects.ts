@@ -33,11 +33,11 @@ export function createDragStatePoller(options: {
 
 export async function resolveWaveformLoad(options: {
   currentFilePath: string;
-  getAudioSource: (path: string) => Promise<{ path: string; mime: string }>;
+  getAudioSource?: (path: string) => Promise<{ path: string; mime: string }>;
   getWaveformPeaks: (path: string) => Promise<{ duration: number; peaks: number[] }>;
   isCurrentJob: (jobId: number) => boolean;
   jobId: number;
-  setAudioSource: (sourcePath: string) => Promise<void>;
+  setAudioSource?: (sourcePath: string) => Promise<void>;
   onReady: (duration: number) => void;
   onError: (error: unknown) => void;
 }) {
@@ -53,8 +53,11 @@ export async function resolveWaveformLoad(options: {
   } = options;
 
   try {
+    const audioSourceJob = getAudioSource
+      ? getAudioSource(currentFilePath)
+      : Promise.resolve({ path: "", mime: "" });
     const [source, waveform] = await Promise.all([
-      getAudioSource(currentFilePath),
+      audioSourceJob,
       getWaveformPeaks(currentFilePath),
     ]);
 
@@ -62,7 +65,9 @@ export async function resolveWaveformLoad(options: {
       return;
     }
 
-    await setAudioSource(source.path);
+    if (setAudioSource && source.path) {
+      await setAudioSource(source.path);
+    }
 
     requestAnimationFrame(() => {
       if (!isCurrentJob(jobId)) {

@@ -46,8 +46,9 @@ const audioRef = { current: null as HTMLAudioElement | null };
 const progressRef = { current: null as HTMLDivElement | null };
 const playheadRafRef = { current: null as number | null };
 const waveformJobIdRef = { current: 0 };
-// 文件路径 → duration 缓存（迷你波形预加载时就写入了，无需等待音频加载）
 export const fileDurationCache: Record<string, number> = {};
+
+let audioLoadId = 0;
 
 export const usePlayerStore = create<PlayerStore>((set, get) => ({
   currentFile: null,
@@ -59,6 +60,20 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   isMuted: false,
 
   selectFile: (name, path) => {
+    const audio = audioRef.current;
+    if (!audio) return { hideTagEditor: true };
+
+    audioLoadId++;
+    const myLoadId = audioLoadId;
+
+    // 1. 停掉当前播放
+    audio.pause();
+
+    // 2. 处理 seek 意图
+    const pct = seekOnLoadPct.current;
+    seekOnLoadPct.current = null;
+
+    // 3. 更新 store
     const currentPlayerState: PlayerState = {
       currentFile: get().currentFile,
       isPlaying: get().isPlaying,
@@ -76,21 +91,39 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
       currentTime: nextSelection.playerState.currentTime,
       duration: nextSelection.playerState.duration,
     });
-    // 立即加载音频，不等 waveform 分析
-    const audio = audioRef.current;
-    if (audio) {
-      // 加时间戳确保浏览器每次都触发 loadedmetadata（相同文件点波形时）
-      const ts = seekOnLoadPct.current !== null ? `?t=${Date.now()}` : "";
-      const srcPath = `local-audio:///${path.replaceAll("\\", "/")}${ts}`;
-      audio.pause();
-      audio.src = srcPath;
+
+    // 4. 设置音频源
+    const ts = pct !== null ? `?t=${Date.now()}` : "";
+    const srcPath = `local-audio:///${path.replaceAll("\\", "/")}${ts}`;
+    audio.src = srcPath;
+
+    if (pct !== null && isFinite(pct) && pct > 0 && pct < 1) {
+      // ── 有 seek：先 load，再 play（用户手势上下文），loadedmetadata 后 seek ──
+      const onMeta = () => {
+        audio.removeEventListener("loadedmetadata", onMeta);
+        if (audioLoadId !== myLoadId) return;
+
+        let dur: number = audio.duration;
+        if (!isFinite(dur) || dur <= 0) {
+          dur = fileDurationCache[path] ?? 0;
+        }
+        const seekTime = pct * dur;
+        if (isFinite(seekTime) && seekTime > 0 && seekTime < dur) {
+          audio.currentTime = seekTime;
+        }
+        // 浏览器在播，seek 后自动从新位置继续
+      };
+      // 先注册再 load() → loadedmetadata 不会错过
+      audio.addEventListener("loadedmetadata", onMeta);
       audio.load();
-      // 如果有等待定位，loadedmetadata 时会 seek 并 play，这里不 play
-      // 否则从开头播放
-      if (seekOnLoadPct.current === null) {
-        audio.play().catch(() => {});
-      }
+      // play() 在 load() 之后 —— 避免被 load() 中止
+      audio.play().catch(() => {});
+    } else {
+      // ── 无 seek：load 后直接 play ──
+      audio.load();
+      audio.play().catch(() => {});
     }
+
     return nextSelection;
   },
 

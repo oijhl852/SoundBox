@@ -54,35 +54,32 @@ export async function readWaveformCacheSafe(
       : [];
 
     if (result.algorithm === WAVEFORM_FALLBACK_ALGORITHM) {
-      log("info", "[waveform] fallback-cache-bypass", { contentId, cachePath });
+      console.log("[waveform-cache] SKIP (fallback algo)", { contentId: contentId.slice(0, 20), cachePath });
       return null;
     }
 
     if (result.version !== WAVEFORM_CACHE_VERSION || result.algorithm !== WAVEFORM_CACHE_ALGORITHM) {
-      log("info", "[waveform] cache-stale", {
-        contentId,
-        cachePath,
-        version: result.version,
-        algorithm: result.algorithm,
-      });
+      console.log("[waveform-cache] STALE", { contentId: contentId.slice(0, 20), fileVer: result.version, expectVer: WAVEFORM_CACHE_VERSION });
       return null;
     }
 
     if (peaks.length === 0) {
-      log("info", "[waveform] cache-empty", { contentId, cachePath });
+      console.log("[waveform-cache] EMPTY", { contentId: contentId.slice(0, 20) });
       return null;
     }
 
+    console.log("[waveform-cache] HIT", { contentId: contentId.slice(0, 20), peaks: peaks.length, dur: result.duration.toFixed(1) });
     return {
       duration: typeof result.duration === "number" && Number.isFinite(result.duration) ? result.duration : 0,
       peaks,
     };
   } catch (error) {
-    log("warn", "[waveform] cache-invalid, deleting", {
-      contentId,
-      cachePath,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (errMsg.includes("ENOENT") || errMsg.includes("no such file")) {
+      console.log("[waveform-cache] MISS (no file)", { contentId: contentId.slice(0, 20) });
+    } else {
+      console.warn("[waveform-cache] INVALID, deleting", { contentId: contentId.slice(0, 20), cachePath, error: errMsg });
+    }
     await fs.rm(cachePath, { force: true }).catch(() => undefined);
     await fs.rm(`${cachePath}.tmp`, { force: true }).catch(() => undefined);
     return null;
@@ -105,6 +102,7 @@ export async function writeWaveformCacheAtomic(
   const tempPath = `${targetPath}.tmp`;
   await fs.writeFile(tempPath, JSON.stringify(payload, null, 2), "utf-8");
   await fs.rename(tempPath, targetPath);
+  console.log("[waveform-cache] WRITE", { contentId: contentId.slice(0, 20), peaks: waveform.peaks.length, dur: waveform.duration.toFixed(1), targetPath });
 
   await cleanupWaveformCache(getPath).catch((err) => {
     log("warn", "[waveform] cache-cleanup-failed", err);
