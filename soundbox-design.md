@@ -1,8 +1,8 @@
 # Soundbox - 音频素材管理工具 设计文档
 
-> 版本：v1.1
+> 版本：v1.2
 > 日期：2026-05-20
-> 状态：✅ 核心功能完备，稳定性已验证，进入功能深化阶段
+> 状态：✅ 标签存储架构升级完成，增量写入 + 原子保护 + NAS 预留
 
 ---
 
@@ -109,6 +109,7 @@
 | **浏览器端波形竞速** | browserWaveform() + Promise.race，与 ffmpeg 子进程竞速先到先得 | ✅ v1.1 |
 | **音频格式扩展** | 扫描/播放支持 .ogg .flac .aac（原仅 .wav .mp3 .m4a） | ✅ v1.1 |
 | **代码清理** | 删除 hooks/ 4 个死文件（22KB）、types.js 残留 | ✅ v1.1 |
+| **标签存储架构升级** | 分片存储（contentId → 独立文件）、原子写入（.tmp→rename）、增量更新 store、旧格式自动迁移、custom_tag_path 可配置 | ✅ v1.2 |
 
 ### 3.2 后续开发优先级
 
@@ -165,11 +166,13 @@
 
 | 文件名 | 用途 | 存储位置 |
 |--------|------|----------|
-| `settings.json` | 素材库配置、用户设置 | Electron 主进程 userData |
+| `settings.json` | 素材库配置、用户设置（含 `custom_tag_path`） | Electron 主进程 userData |
 | `file-index.json` | 文件实例 -> 元数据映射 | Electron 主进程 userData |
 | `content-index.json` | contentId -> 实例列表 + 波形缓存路径 | Electron 主进程 userData |
-| `local-tags.json` | contentId -> 标签数据 | Electron 主进程 userData |
+| `tags/content/{bucket}/{contentId}.json` | v1.2 分片标签存储，每个 contentId 独立文件，原子写入 | `custom_tag_path` 或 `%APPDATA%/Soundbox/tags/` |
 | `name-index.json` | 文件名归一化 -> 历史标签建议 | Electron 主进程 userData |
+
+> v1.2 起标签存储从单一 `local-tags.json` 升级为分片目录。旧格式首次启动自动迁移。
 
 ### 标签合并原则
 
@@ -524,6 +527,7 @@ const handleClick = () => {
 - [x] 冗余 IPC 与文件读取清理
 - [x] 音频格式扩展至 .ogg .flac .aac
 - [x] 删除 hooks/ 死代码 + types.js 残留
+- [x] 标签存储分片升级 + 原子写入 + 增量更新 + 旧格式迁移
 - [ ] 实现标签视图：左侧标签列表 → 右侧该标签下所有文件
 - [ ] 实现多选文件 + 批量打标签
 - [ ] 实现文件夹树展开状态本地持久化
