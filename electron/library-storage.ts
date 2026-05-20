@@ -196,6 +196,43 @@ export function createLibraryStorage(getAppDataDir: () => string) {
     await fs.rm(`${filePath}.tmp`, { force: true }).catch(() => {});
   }
 
+  // 扫描所有分片文件，构建完整 LocalTagsFile
+  async function readAllContentTags(settings: AppSettings): Promise<LocalTagsFile> {
+    // 先尝试旧格式（未迁移或迁移中断）
+    try {
+      const oldTags = await readLocalTagsFile();
+      if (Object.keys(oldTags.contents).length > 0) {
+        return oldTags;
+      }
+    } catch { /* 旧文件不存在，正常 */ }
+
+    const tagsBaseDir = getTagsBaseDir(settings);
+    const contentDir = path.join(tagsBaseDir, "content");
+    const result: LocalTagsFile = { version: "3.0", contents: {} };
+
+    try {
+      const buckets = await fs.readdir(contentDir, { withFileTypes: true });
+      for (const bucket of buckets) {
+        if (!bucket.isDirectory()) continue;
+        const bucketPath = path.join(contentDir, bucket.name);
+        const files = await fs.readdir(bucketPath);
+        for (const file of files) {
+          if (!file.endsWith(".json")) continue;
+          try {
+            const raw = await fs.readFile(path.join(bucketPath, file), "utf-8");
+            const tags = contentTagFromFile(JSON.parse(raw.trim()));
+            if (Object.keys(tags).length === 0) continue;
+            // 从文件名还原 contentId：sha256_ABC123...json → sha256:ABC123...
+            const contentId = file.replace(".json", "").replace("_", ":");
+            result.contents[contentId] = { tags };
+          } catch { /* skip corrupt files */ }
+        }
+      }
+    } catch { /* content dir not yet created */ }
+
+    return result;
+  }
+
   // 旧格式迁移：local-tags.json → 分片
   async function migrateToShardedTags(settings: AppSettings) {
     const oldPath = getLocalTagsPath();
@@ -256,6 +293,7 @@ export function createLibraryStorage(getAppDataDir: () => string) {
     readContentTags,
     writeContentTags,
     deleteContentTags,
+    readAllContentTags,
     migrateToShardedTags,
   };
 }

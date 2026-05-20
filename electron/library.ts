@@ -43,6 +43,7 @@ export function createLibraryService(getAppDataDir: () => string) {
     readContentTags,
     writeContentTags,
     deleteContentTags,
+    readAllContentTags,
     migrateToShardedTags,
   } = storage;
 
@@ -77,9 +78,10 @@ export function createLibraryService(getAppDataDir: () => string) {
 
   async function buildLibrarySnapshot(libraryPath: string): Promise<LibrarySnapshot> {
     const rootPath = path.resolve(libraryPath);
+    const settings = await loadSettingsFile();
     const fileIndex = await readFileIndexFile();
     const contentIndex = await readContentIndexFile();
-    const localTags = await readLocalTagsFile();
+    const localTags = await readAllContentTags(settings);
     const nameIndex = await readNameIndexFile();
     const normalizationConfig = await readNameNormalizationConfig();
     await ensureLocalMetaDir();
@@ -135,7 +137,8 @@ export function createLibraryService(getAppDataDir: () => string) {
     const rootPath = path.resolve(libraryPath);
     const libraryId = createLibraryId(rootPath);
     const libraryName = path.basename(rootPath) || "Root";
-    const localTags = await readLocalTagsFile();
+    const settings = await loadSettingsFile();
+    const localTags = await readAllContentTags(settings);
     const currentFileIndex = await readFileIndexFile();
     const currentContentIndex = await readContentIndexFile();
 
@@ -204,9 +207,10 @@ export function createLibraryService(getAppDataDir: () => string) {
    */
   async function getCachedSnapshot(libraryPath: string): Promise<LibrarySnapshot | null> {
     const rootPath = path.resolve(libraryPath);
+    const settings = await loadSettingsFile();
     const fileIndex = await readFileIndexFile();
     const contentIndex = await readContentIndexFile();
-    const localTags = await readLocalTagsFile();
+    const localTags = await readAllContentTags(settings);
     const nameIndex = await readNameIndexFile();
     const normalizationConfig = await readNameNormalizationConfig();
 
@@ -251,6 +255,7 @@ export function createLibraryService(getAppDataDir: () => string) {
     readContentTags,
     writeContentTags,
     deleteContentTags,
+    readAllContentTags,
     migrateToShardedTags,
   };
 }
