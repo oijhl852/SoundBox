@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FileAudio, X, Tag, Search } from "lucide-react";
 import { useCallback, memo, useMemo, useState, useRef, useEffect } from "react";
 import { List } from "react-window";
