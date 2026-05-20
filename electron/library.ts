@@ -39,6 +39,11 @@ export function createLibraryService(getAppDataDir: () => string) {
     writeLocalTagsFile,
     readNameIndexFile,
     readNameNormalizationConfig,
+    getTagsBaseDir,
+    readContentTags,
+    writeContentTags,
+    deleteContentTags,
+    migrateToShardedTags,
   } = storage;
 
 
@@ -242,5 +247,10 @@ export function createLibraryService(getAppDataDir: () => string) {
     buildLibraryIndex,
     getCachedSnapshot,
     writeLocalTagsFile,
+    getTagsBaseDir,
+    readContentTags,
+    writeContentTags,
+    deleteContentTags,
+    migrateToShardedTags,
   };
 }

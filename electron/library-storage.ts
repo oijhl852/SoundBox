@@ -5,6 +5,7 @@ import type {
   ContentIndexFile,
   FileIndexFile,
   LocalTagsFile,
+  TagEntry,
 } from "../src/lib/types.js";
 import { log } from "../src/lib/logger.js";
 
@@ -27,7 +28,7 @@ export const DEFAULT_CONTENT_INDEX: ContentIndexFile = {
 };
 
 export const DEFAULT_LOCAL_TAGS: LocalTagsFile = {
-  version: "2.0",
+  version: "3.0",
   contents: {},
 };
 
@@ -145,6 +146,80 @@ export function createLibraryStorage(getAppDataDir: () => string) {
     await fs.writeFile(getLocalTagsPath(), JSON.stringify(localTags, null, 2), "utf-8");
   }
 
+  // ── 分片标签存储（v3.0+）──
+
+  function getTagsBaseDir(settings: AppSettings) {
+    return settings.custom_tag_path
+      ? path.join(settings.custom_tag_path, "tags")
+      : path.join(getAppDataDir(), "tags");
+  }
+
+  function getContentTagPath(tagsBaseDir: string, contentId: string) {
+    const sanitized = contentId.replaceAll(":", "_");
+    const bucket = sanitized.slice(0, 9);
+    return path.join(tagsBaseDir, "content", bucket, `${sanitized}.json`);
+  }
+
+  function contentTagFromFile(raw: Record<string, unknown>): Record<string, TagEntry[]> {
+    const result: Record<string, TagEntry[]> = {};
+    for (const [group, entries] of Object.entries(raw)) {
+      if (!Array.isArray(entries)) continue;
+      result[group] = entries.filter(
+        (e): e is TagEntry => typeof (e as TagEntry)?.value === "string"
+      );
+    }
+    return result;
+  }
+
+  async function readContentTags(tagsBaseDir: string, contentId: string): Promise<Record<string, TagEntry[]>> {
+    const filePath = getContentTagPath(tagsBaseDir, contentId);
+    try {
+      const raw = await fs.readFile(filePath, "utf-8");
+      const parsed = JSON.parse(raw.trim());
+      return contentTagFromFile(parsed);
+    } catch {
+      return {};
+    }
+  }
+
+  async function writeContentTags(tagsBaseDir: string, contentId: string, tags: Record<string, TagEntry[]>) {
+    const filePath = getContentTagPath(tagsBaseDir, contentId);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    const tempPath = `${filePath}.tmp`;
+    await fs.writeFile(tempPath, JSON.stringify(tags, null, 2), "utf-8");
+    await fs.rename(tempPath, filePath);
+  }
+
+  async function deleteContentTags(tagsBaseDir: string, contentId: string) {
+    const filePath = getContentTagPath(tagsBaseDir, contentId);
+    await fs.rm(filePath, { force: true }).catch(() => {});
+    await fs.rm(`${filePath}.tmp`, { force: true }).catch(() => {});
+  }
+
+  // 旧格式迁移：local-tags.json → 分片
+  async function migrateToShardedTags(settings: AppSettings) {
+    const oldPath = getLocalTagsPath();
+    try {
+      await fs.access(oldPath);
+    } catch {
+      return; // 旧文件不存在，无需迁移
+    }
+
+    const oldTags = await readLocalTagsFile();
+    if (oldTags.version === "3.0") return; // 已迁移
+
+    const tagsBaseDir = getTagsBaseDir(settings);
+    for (const [contentId, record] of Object.entries(oldTags.contents)) {
+      if (record.tags && Object.keys(record.tags).length > 0) {
+        await writeContentTags(tagsBaseDir, contentId, record.tags);
+      }
+    }
+
+    // 迁移完成，删除旧文件
+    await fs.rm(oldPath, { force: true }).catch(() => {});
+    console.log("[tags] migrated to sharded v3.0, entries:", Object.keys(oldTags.contents).length);
+  }
+
   async function readNameIndexFile() {
     return readJsonFile(getNameIndexPath(), DEFAULT_NAME_INDEX);
   }
@@ -176,5 +251,11 @@ export function createLibraryStorage(getAppDataDir: () => string) {
     readNameIndexFile,
     writeNameIndexFile,
     readNameNormalizationConfig,
+    // 分片存储
+    getTagsBaseDir,
+    readContentTags,
+    writeContentTags,
+    deleteContentTags,
+    migrateToShardedTags,
   };
 }

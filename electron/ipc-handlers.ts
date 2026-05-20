@@ -28,8 +28,18 @@ export function registerSoundboxIpcHandlers(ipcMain: IpcMain) {
   const tagService = createTagService({
     readLocalTagsFile: libraryService.readLocalTagsFile,
     writeLocalTagsFile: libraryService.writeLocalTagsFile,
+    getTagsBaseDir: libraryService.getTagsBaseDir,
+    readContentTags: libraryService.readContentTags,
+    writeContentTags: libraryService.writeContentTags,
+    deleteContentTags: libraryService.deleteContentTags,
+    loadSettings: () => libraryService.loadSettingsFile(),
   });
   const dragDebugStore = createDragDebugStore();
+
+  // 启动时自动迁移旧格式
+  libraryService.loadSettingsFile().then((settings) =>
+    libraryService.migrateToShardedTags(settings).catch(() => {})
+  );
 
   ipcMain.handle("soundbox:select-folder", () => selectFolder());
   ipcMain.handle("soundbox:load-settings", () => libraryService.loadSettingsFile());

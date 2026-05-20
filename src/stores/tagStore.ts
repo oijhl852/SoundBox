@@ -62,24 +62,12 @@ export const useTagStore = create<TagStore>((set, get) => ({
 
     const { selectedTagGroup, newTagValue } = get();
     const payload = resolveTagPayload({
-      groupOverride,
-      valueOverride,
-      selectedTagGroup,
-      newTagValue,
+      groupOverride, valueOverride, selectedTagGroup, newTagValue,
     });
     if (!payload.value) return;
 
-    const activeLibrary = useLibraryStore.getState().activeLibrary;
-    const cacheSnapshot = useLibraryStore.getState().cacheSnapshot;
-    const applySnapshot = useLibraryStore.getState().applySnapshot;
-
     const nextTagValue = await addResolvedTag({
-      contentId,
-      group: payload.group,
-      value: payload.value,
-      activeLibrary,
-      cacheSnapshot,
-      applySnapshot,
+      contentId, group: payload.group, value: payload.value,
     });
     set({ newTagValue: nextTagValue });
   },
@@ -92,18 +80,7 @@ export const useTagStore = create<TagStore>((set, get) => ({
     const contentId = resolveTagRemovalContentId(allFiles, currentFile.path);
     if (!contentId) return;
 
-    const activeLibrary = useLibraryStore.getState().activeLibrary;
-    const cacheSnapshot = useLibraryStore.getState().cacheSnapshot;
-    const applySnapshot = useLibraryStore.getState().applySnapshot;
-
-    await removeResolvedTag({
-      contentId,
-      group: tag.group,
-      value: tag.value,
-      activeLibrary,
-      cacheSnapshot,
-      applySnapshot,
-    });
+    await removeResolvedTag({ contentId, group: tag.group, value: tag.value });
   },
 
   handleAdoptSuggestion: async () => {
@@ -116,17 +93,8 @@ export const useTagStore = create<TagStore>((set, get) => ({
 
     const allFiles = useLibraryStore.getState().allFiles;
     const contentId = resolveTagContentId(allFiles, currentFile.path) ?? "";
-    const activeLibrary = useLibraryStore.getState().activeLibrary;
-    const cacheSnapshot = useLibraryStore.getState().cacheSnapshot;
-    const applySnapshot = useLibraryStore.getState().applySnapshot;
 
-    await adoptSuggestionTags({
-      contentId,
-      suggestion,
-      activeLibrary,
-      cacheSnapshot,
-      applySnapshot,
-    });
+    await adoptSuggestionTags({ contentId, suggestion });
   },
 
   toggleTagFilter: (tag) => {
