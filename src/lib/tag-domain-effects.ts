@@ -1,13 +1,14 @@
 import { addTag, removeTag } from "@/lib/api";
 import { buildSuggestionTags, resetTagEditorValue } from "@/lib/tag-domain-state";
 import type { NameTagSuggestion, TagEntry } from "@/lib/types";
-import { useLibraryStore } from "@/stores/libraryStore";
+
 
 /** 增量更新 store 中的 tags——不重建快照，直接改内存 */
 function updateTagsInPlace(
   contentId: string,
   buildTags: (prevByGroup: Record<string, TagEntry[]>) => Record<string, TagEntry[]>
 ) {
+  const { useLibraryStore } = require("@/stores/libraryStore");
   const state = useLibraryStore.getState();
   const allFiles = state.allFiles;
   const filePaths = allFiles.filter((f) => f.contentId === contentId).map((f) => f.path);
