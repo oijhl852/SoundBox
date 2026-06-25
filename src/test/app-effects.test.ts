@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createLibraryLoadErrorState, createWaveformJobGuard, mergeMiniWaveforms } from "@/lib/app-effects";
+import { createWaveformJobGuard, mergeMiniWaveforms } from "@/lib/app-effects";
+import { buildLibraryErrorState } from "@/lib/app-orchestration";
 
 describe("app-effects", () => {
   it("merges only missing mini waveforms", () => {
@@ -15,7 +16,7 @@ describe("app-effects", () => {
   });
 
   it("builds error state from thrown error", () => {
-    expect(createLibraryLoadErrorState(new Error("boom"))).toEqual({
+    expect(buildLibraryErrorState(new Error("boom"))).toEqual({
       status: "error",
       message: "boom",
     });

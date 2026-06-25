@@ -1,9 +1,10 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { LibrarySidebar } from "@/components/LibrarySidebar";
 import { FileListPanel } from "@/components/FileListPanel";
 import { DropInspectorWindow } from "@/components/DropInspectorWindow";
+import { StatusBar } from "@/components/StatusBar";
 import { useLibraryStore } from "@/stores/libraryStore";
 import { usePlayerStore, usePlayerAudioEffect, audioRef } from "@/stores/playerStore";
 import { useUiStore, useSidebarResizeEffect, useThemeEffect } from "@/stores/uiStore";
@@ -32,15 +33,8 @@ function App() {
   const setVolume = usePlayerStore((s) => s.setVolume);
   const isMuted = usePlayerStore((s) => s.isMuted);
   const toggleMute = usePlayerStore((s) => s.toggleMute);
-  const allFiles = useLibraryStore((s) => s.allFiles);
-  const miniWaveforms = useLibraryStore((s) => s.miniWaveforms);
-  const waveformTotal = allFiles.length;
   const searchQuery = useUiStore((s) => s.searchQuery);
   const setSearchQuery = useUiStore((s) => s.setSearchQuery);
-  const waveformLoaded = useMemo(
-    () => allFiles.filter((f) => miniWaveforms[f.path]?.length).length,
-    [allFiles, miniWaveforms]
-  );
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground select-none">
@@ -100,12 +94,7 @@ function App() {
       </div>
 
       {/* 底部状态栏 */}
-      <div className="flex h-6 items-center border-t px-4 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1">
-          波形 {waveformTotal > 0 ? `${waveformLoaded}/${waveformTotal}` : ""}
-        </span>
-        <div className="ml-auto" />
-      </div>
+      <StatusBar />
 
       {showDropInspector && (
         <div

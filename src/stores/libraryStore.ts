@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import { bootstrapLibraryDomain } from "@/lib/library-domain-effects";
 import { buildLibraryClearedState, buildLibraryControllerState, buildLibraryErrorResult, buildSnapshotState } from "@/lib/library-controller-state";
-import { shouldTriggerBackgroundIndex } from "@/lib/library-actions";
+import { buildPrefilledWaveformMap, shouldTriggerBackgroundIndex } from "@/lib/library-actions";
 import { scheduleBackgroundIndex } from "@/lib/app-effects";
-import { buildLibraryIndex, buildLibrarySnapshot, getCachedSnapshot } from "@/lib/api";
+import { batchPreloadWaveforms, buildLibraryIndex, buildLibrarySnapshot, getCachedSnapshot } from "@/lib/api";
 import { logError } from "@/lib/logger";
 import { usePlayerStore } from "./playerStore";
 import type {
@@ -23,6 +23,16 @@ import type {
 // ──────────────────────────────────────────────
 
 const libraryCacheRef = new Map<string, LibrarySnapshot>();
+const LIBRARY_CACHE_MAX = 5;
+
+/** 缓存写入（带上限淘汰：超出上限时删除最早插入的条目） */
+function cacheSet(libraryPath: string, snapshot: LibrarySnapshot) {
+  if (libraryCacheRef.size >= LIBRARY_CACHE_MAX && !libraryCacheRef.has(libraryPath)) {
+    const oldestKey = libraryCacheRef.keys().next().value;
+    if (oldestKey) libraryCacheRef.delete(oldestKey);
+  }
+  libraryCacheRef.set(libraryPath, snapshot);
+}
 let libraryRequestId = 0;
 
 // ──────────────────────────────────────────────
@@ -57,7 +67,8 @@ interface LibraryActions {
   handleAddLibrary: () => Promise<boolean>;
   handleRemoveLibrary: (path: string) => Promise<void>;
   toggleFolder: (path: string) => void;
-  applySnapshot: (snapshot: LibrarySnapshot) => void;
+  applySnapshot: (snapshot: LibrarySnapshot, preloadedPeaks?: MiniWaveformMap) => void;
+  prefillWaveformsFromCache: (snapshot: LibrarySnapshot) => Promise<MiniWaveformMap | undefined>;
   cacheSnapshot: (libraryPath: string, snapshot: LibrarySnapshot) => void;
   refreshActiveLibrarySnapshot: () => Promise<void>;
   setSelectedFolderPath: (value: string | null) => void;
@@ -92,9 +103,13 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
 
   // ────── Actions ──────
 
-  applySnapshot: (snapshot) => {
-    const { miniWaveforms, selectedFolderPath } = get();
-    const derived = buildSnapshotState(snapshot, miniWaveforms, selectedFolderPath);
+  applySnapshot: (snapshot, preloadedPeaks?: MiniWaveformMap) => {
+    const { miniWaveforms: prevMini, selectedFolderPath } = get();
+    const derived = buildSnapshotState(snapshot, prevMini, selectedFolderPath);
+    // 如果有磁盘批量预载的数据，合并进去（磁盘数据优先）
+    if (preloadedPeaks) {
+      derived.miniWaveforms = { ...derived.miniWaveforms, ...preloadedPeaks };
+    }
     set({
       folderTree: derived.folderTree,
       expandedFolders: derived.expandedFolders,
@@ -108,8 +123,18 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
     });
   },
 
+  /** 从 snapshot 中提取文件→contentId 映射，批量读磁盘缓存 */
+  prefillWaveformsFromCache: async (snapshot: LibrarySnapshot): Promise<MiniWaveformMap | undefined> => {
+    if (!snapshot.contentIndex) return;
+    const peaksByContentId = await batchPreloadWaveforms(
+      Object.keys(snapshot.contentIndex.contents ?? {})
+    );
+    const result = buildPrefilledWaveformMap(snapshot.tree, peaksByContentId);
+    return Object.keys(result).length > 0 ? result : undefined;
+  },
+
   cacheSnapshot: (libraryPath, snapshot) => {
-    libraryCacheRef.set(libraryPath, snapshot);
+    cacheSet(libraryPath, snapshot);
   },
 
   selectLibrary: async (path) => {
@@ -124,7 +149,8 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
     const cached = libraryCacheRef.get(path);
     if (cached) {
       if (shouldApplyResult(path)) {
-        get().applySnapshot(cached);
+        const peaks = await get().prefillWaveformsFromCache(cached);
+        get().applySnapshot(cached, peaks);
       }
       return;
     }
@@ -132,8 +158,9 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
     // 磁盘缓存
     const diskCached = await getCachedSnapshot(path);
     if (diskCached && shouldApplyResult(path)) {
-      get().applySnapshot(diskCached);
-      libraryCacheRef.set(path, diskCached);
+      const peaks = await get().prefillWaveformsFromCache(diskCached);
+      get().applySnapshot(diskCached, peaks);
+      cacheSet(path, diskCached);
       if (shouldTriggerBackgroundIndex(diskCached)) {
         void scheduleBackgroundIndex({
           snapshot: diskCached,
@@ -141,7 +168,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
           runBuildLibraryIndex: buildLibraryIndex,
           shouldApplyResult,
           onCompleted: (fullSnapshot) => {
-            libraryCacheRef.set(path, fullSnapshot);
+            cacheSet(path, fullSnapshot);
             get().applySnapshot(fullSnapshot);
           },
           onError: (indexErr) => {
@@ -159,7 +186,8 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
     try {
       const previewSnapshot = await buildLibrarySnapshot(path);
       if (!shouldApplyResult(path)) return;
-      get().applySnapshot(previewSnapshot);
+      const peaks = await get().prefillWaveformsFromCache(previewSnapshot);
+      get().applySnapshot(previewSnapshot, peaks);
 
       if (shouldTriggerBackgroundIndex(previewSnapshot)) {
         void scheduleBackgroundIndex({
@@ -168,7 +196,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
           runBuildLibraryIndex: buildLibraryIndex,
           shouldApplyResult,
           onCompleted: (fullSnapshot) => {
-            libraryCacheRef.set(path, fullSnapshot);
+            cacheSet(path, fullSnapshot);
             get().applySnapshot(fullSnapshot);
           },
           onError: (indexErr) => {
@@ -177,7 +205,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
           },
         });
       } else {
-        libraryCacheRef.set(path, previewSnapshot);
+        cacheSet(path, previewSnapshot);
       }
     } catch (err) {
       if (!shouldApplyResult(path)) return;
@@ -204,13 +232,15 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
     const path = await selectFolder();
     if (!path) return false;
 
-    // 从文件夹名自动推断素材库名称
+    const { newLibName, newLibType } = get();
+    // 优先使用用户在表单中输入的名称，否则从文件夹名推断
     const segments = path.replace(/\\/g, "/").split("/").filter(Boolean);
-    const folderName = segments[segments.length - 1] || "未命名素材库";
+    const folderName = newLibName.trim() || segments[segments.length - 1] || "未命名素材库";
+    const libType = newLibType || "music";
 
     try {
       const { addLibrary, loadSettings } = await import("@/lib/api");
-      await addLibrary(folderName, path, "music");
+      await addLibrary(folderName, path, libType);
       const settings = await loadSettings();
 
       const controllerState = buildLibraryControllerState({ libraries, activeLibrary, libraryLoadState });
@@ -228,6 +258,7 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
       await get().selectLibrary(path);
       return true;
     } catch (e) {
+      logError("添加素材库失败", e);
       return false;
     }
   },
@@ -296,8 +327,9 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
     const { activeLibrary } = get();
     if (!activeLibrary) return;
     const snapshot = await buildLibrarySnapshot(activeLibrary);
-    libraryCacheRef.set(activeLibrary, snapshot);
-    get().applySnapshot(snapshot);
+    cacheSet(activeLibrary, snapshot);
+    const peaks = await get().prefillWaveformsFromCache(snapshot);
+    get().applySnapshot(snapshot, peaks);
   },
 
   initLibraries: async () => {

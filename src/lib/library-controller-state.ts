@@ -1,4 +1,4 @@
-import { buildLibraryErrorState } from "@/lib/app-orchestration";
+import { buildLibraryErrorState, buildLoadingState } from "@/lib/app-orchestration";
 import { deriveLibraryStateFromSnapshot } from "@/lib/library-state";
 import { createEmptyLibraryResult } from "@/lib/library-management-actions";
 import type {
@@ -87,13 +87,6 @@ export function buildLibraryClearedState() {
     nameSuggestions: {} as Record<string, NameTagSuggestion>,
     miniWaveforms: {} as MiniWaveformMap,
     contentIndex: null as ContentIndexFile | null,
-  };
-}
-
-export function buildLibraryLoadingState(message: string): LibraryLoadState {
-  return {
-    status: "indexing",
-    message,
   };
 }
 

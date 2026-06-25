@@ -9,6 +9,7 @@ import { usePlayerStore, fileDurationCache } from "@/stores/playerStore";
 import { useTagStore } from "@/stores/tagStore";
 import { seekOnLoadPct } from "@/lib/audio-element-effects";
 import { useUiStore } from "@/stores/uiStore";
+import { useShallow } from "zustand/react/shallow";
 import { collectFilesForFolder } from "@/lib/file-list-state";
 import { buildFilteredFiles } from "@/lib/file-filtering";
 import { useMiniWaveformPreload, useBackgroundWaveformPreload, preloadSingleFile } from "@/lib/use-mini-waveform-preload";
@@ -249,22 +250,34 @@ function DragHandle({ onResizeStart }: { onResizeStart: (e: React.MouseEvent) =>
 
 // ── 主组件 ──
 export function FileListPanel() {
-  const folderTree = useLibraryStore((s) => s.folderTree);
-  const selectedFolderPath = useLibraryStore((s) => s.selectedFolderPath);
-  const contentIndex = useLibraryStore((s) => s.contentIndex);
-  const libTags = useLibraryStore((s) => s.tags);
-  const nameSuggestions = useLibraryStore((s) => s.nameSuggestions);
-  const miniWaveforms = useLibraryStore((s) => s.miniWaveforms);
-  const setMiniWaveforms = useLibraryStore((s) => s.setMiniWaveforms);
-  const librariesCount = useLibraryStore((s) => s.libraries.length);
-  const libraryLoadStateStatus = useLibraryStore((s) => s.libraryLoadState.status);
+  const {
+    folderTree, selectedFolderPath, contentIndex,
+    tags: libTags, nameSuggestions, miniWaveforms, setMiniWaveforms,
+    librariesCount, libraryLoadStateStatus,
+  } = useLibraryStore(useShallow((s) => ({
+    folderTree: s.folderTree,
+    selectedFolderPath: s.selectedFolderPath,
+    contentIndex: s.contentIndex,
+    tags: s.tags,
+    nameSuggestions: s.nameSuggestions,
+    miniWaveforms: s.miniWaveforms,
+    setMiniWaveforms: s.setMiniWaveforms,
+    librariesCount: s.libraries.length,
+    libraryLoadStateStatus: s.libraryLoadState.status,
+  })));
+
   const searchQuery = useUiStore((s) => s.searchQuery);
-  const currentFilePath = usePlayerStore((s) => s.currentFile?.path ?? null);
-  const currentTime = usePlayerStore((s) => s.currentTime);
-  const duration = usePlayerStore((s) => s.duration);
-  const isPlaying = usePlayerStore((s) => s.isPlaying);
   const tagFilters = useTagStore((s) => s.tagFilters);
-  const currentFile = usePlayerStore((s) => s.currentFile);
+
+  const {
+    currentFilePath, currentTime, duration, isPlaying, currentFile,
+  } = usePlayerStore(useShallow((s) => ({
+    currentFilePath: s.currentFile?.path ?? null,
+    currentTime: s.currentTime,
+    duration: s.duration,
+    isPlaying: s.isPlaying,
+    currentFile: s.currentFile,
+  })));
 
   const [showTagEditor, setShowTagEditor] = useState(false);
 
@@ -319,11 +332,11 @@ export function FileListPanel() {
   useMiniWaveformPreload({ filteredFiles, miniWaveforms, setMiniWaveforms });
   useBackgroundWaveformPreload({ allFiles: useLibraryStore.getState().allFiles, miniWaveforms, setMiniWaveforms });
 
-  const rowData: FileRowData = {
+  const rowData = useMemo<FileRowData>(() => ({
     files: filteredFiles, currentFilePath, tagsByPath: libTags,
     miniWaveforms, currentTime, duration, isPlaying,
     nameWidth: colWidthRef.name, tagsWidth: colWidthRef.tags,
-  };
+  }), [filteredFiles, currentFilePath, libTags, miniWaveforms, currentTime, duration, isPlaying]);
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
@@ -365,7 +378,7 @@ export function FileListPanel() {
               defaultHeight={600}
               rowCount={filteredFiles.length}
               rowHeight={ROW_HEIGHT}
-              rowComponent={Row as any}
+              rowComponent={Row as any /* react-window 类型要求 class 组件，Row 是函数组件 */}
               rowProps={rowData}
               overscanCount={10}
               style={{ width: "100%", height: "100%" }}

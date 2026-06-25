@@ -7,10 +7,8 @@ import {
   buildTagFilterToggle,
   canRemoveTag,
   resolveCurrentContentId,
-  resolveCurrentFileMeta,
   resolveSuggestionForFile,
   resolveTagRemovalContentId,
-  toggleTagFilterState,
 } from "@/lib/tag-domain-state";
 
 
@@ -67,9 +65,9 @@ describe("tag-domain-state", () => {
 
   it("builds current file meta and toggles tag filter set", () => {
     const files = [{ name: "A.wav", path: "A", folder: "fx", contentId: "cid-a" }];
-    expect(resolveCurrentFileMeta(files, "A")?.contentId).toBe("cid-a");
-    expect([...toggleTagFilterState(new Set<string>(), "紧张")]).toEqual(["紧张"]);
-    expect([...toggleTagFilterState(new Set<string>(["紧张"]), "紧张")]).toEqual([]);
+    expect(buildCurrentFileMeta(files, "A")?.contentId).toBe("cid-a");
+    expect([...buildTagFilterToggle(new Set<string>(), "紧张")]).toEqual(["紧张"]);
+    expect([...buildTagFilterToggle(new Set<string>(["紧张"]), "紧张")]).toEqual([]);
     expect(canRemoveTag({ value: "紧张", group: "mood", author: "user", createdAt: "2026-04-04T00:00:00.000Z" })).toBe(true);
 
   });

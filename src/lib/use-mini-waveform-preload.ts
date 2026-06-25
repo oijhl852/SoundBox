@@ -7,7 +7,16 @@ import { fileDurationCache } from "@/stores/playerStore";
 import { browserWaveform } from "./browser-waveform";
 import type { FileMeta, MiniWaveformMap } from "./types";
 
-// ── 模块级计数器 ──
+/**
+ * 模块级波形加载任务计数器。
+ *
+ * 架构说明：当前为模块级变量（而非 React useRef），理由：
+ * ─ 应用为单 FileListPanel 架构，同一时间只有一个预载批次在运行。
+ * ─ urgentJobId 用于紧急预载去重（同一文件多次点击不重复触发），
+ *   miniWaveformJobIdRef 用于后台预载批次去重。
+ *
+ * ⚠ 若未来引入多 FileListPanel 或多窗口，请将此处重构为组件实例内 useRef，或通过 Context 隔离。
+ */
 let urgentJobId = 0;
 const miniWaveformJobIdRef = { current: 0 };
 

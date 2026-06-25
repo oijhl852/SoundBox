@@ -127,13 +127,6 @@ export function mergeMiniWaveforms(
   return { ...previous, ...nextEntries };
 }
 
-export function createLibraryLoadErrorState(error: unknown): LibraryLoadState {
-  return {
-    status: "error",
-    message: error instanceof Error ? error.message : String(error),
-  };
-}
-
 export function createWaveformJobGuard(activeJobIdRef: { current: number }) {
   return (jobId: number) => shouldAutoplayNextSource(jobId, activeJobIdRef.current);
 }

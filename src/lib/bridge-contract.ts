@@ -31,6 +31,7 @@ export type SoundboxBridge = {
   getWaveformPeaks: (path: string) => Promise<WaveformResponse>;
   getSyncStatus: () => Promise<SyncStatus>;
   getDragDebugState: () => Promise<DragDebugState>;
+  batchPreloadWaveforms: (contentIds: string[]) => Promise<Record<string, number[]>>;
   dragOutFile: (path: string, iconPath?: string) => void;
 };
 

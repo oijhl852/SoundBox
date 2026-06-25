@@ -3,6 +3,7 @@ import path from "node:path";
 import { computeContentId, getAudioSource } from "./audio.js";
 import { getWaveformPeaks as getWaveformPeaksForFile } from "./ffmpeg.js";
 import { inspectAudioFile } from "./waveform-generator.js";
+import { readWaveformCacheSafe } from "./waveform-cache.js";
 import { selectFolder } from "./system.js";
 import { createLibraryService } from "./library.js";
 import { createTagService } from "./tags.js";
@@ -86,5 +87,23 @@ export function registerSoundboxIpcHandlers(ipcMain: IpcMain) {
     return job;
   });
   ipcMain.handle("soundbox:get-drag-debug-state", () => dragDebugStore.getDragDebugState());
+  // 批量预载磁盘波形缓存（启动时一次性填充，并行读取最多 50 个文件）
+  ipcMain.handle("soundbox:batch-preload-waveforms", async (_event, contentIds: string[]) => {
+    const results: Record<string, number[]> = {};
+    const BATCH = 50;
+    for (let i = 0; i < contentIds.length; i += BATCH) {
+      const slice = contentIds.slice(i, i + BATCH);
+      const entries = await Promise.all(
+        slice.map(async (contentId) => {
+          const cached = await readWaveformCacheSafe((name) => app.getPath(name), contentId);
+          return cached?.peaks?.length ? [contentId, cached.peaks] as const : null;
+        })
+      );
+      for (const entry of entries) {
+        if (entry) results[entry[0]] = entry[1];
+      }
+    }
+    return results;
+  });
   registerDragOutHandler(ipcMain, dragDebugStore);
 }

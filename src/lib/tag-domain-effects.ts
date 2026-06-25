@@ -1,14 +1,14 @@
 import { addTag, removeTag } from "@/lib/api";
-import { buildSuggestionTags, resetTagEditorValue } from "@/lib/tag-domain-state";
+import { buildSuggestionAdoptionPlan } from "@/lib/tag-domain-state";
 import type { NameTagSuggestion, TagEntry } from "@/lib/types";
 
 
 /** 增量更新 store 中的 tags——不重建快照，直接改内存 */
-function updateTagsInPlace(
+async function updateTagsInPlace(
   contentId: string,
   buildTags: (prevByGroup: Record<string, TagEntry[]>) => Record<string, TagEntry[]>
 ) {
-  const { useLibraryStore } = require("@/stores/libraryStore");
+  const { useLibraryStore } = await import("@/stores/libraryStore");
   const state = useLibraryStore.getState();
   const allFiles = state.allFiles;
   const filePaths = allFiles.filter((f) => f.contentId === contentId).map((f) => f.path);
@@ -39,7 +39,7 @@ export async function addResolvedTag(options: {
 }) {
   await addTag(options.contentId, options.group, options.value, "user");
 
-  updateTagsInPlace(options.contentId, (prev) => {
+  await updateTagsInPlace(options.contentId, (prev) => {
     const nextTag: TagEntry = {
       group: options.group,
       value: options.value,
@@ -54,7 +54,7 @@ export async function addResolvedTag(options: {
     return { ...prev, [options.group]: groupTags };
   });
 
-  return resetTagEditorValue();
+  return "";
 }
 
 export async function removeResolvedTag(options: {
@@ -64,7 +64,7 @@ export async function removeResolvedTag(options: {
 }) {
   await removeTag(options.contentId, options.group, options.value);
 
-  updateTagsInPlace(options.contentId, (prev) => {
+  await updateTagsInPlace(options.contentId, (prev) => {
     const groupTags = (prev[options.group] ?? []).filter(
       (t) => t.value !== options.value
     );
@@ -82,13 +82,13 @@ export async function adoptSuggestionTags(options: {
   contentId: string;
   suggestion: NameTagSuggestion;
 }) {
-  for (const tag of buildSuggestionTags(options.suggestion)) {
+  for (const tag of buildSuggestionAdoptionPlan(options.suggestion)) {
     await addTag(options.contentId, tag.group, tag.value, "name-hint");
   }
 
-  updateTagsInPlace(options.contentId, (prev) => {
+  await updateTagsInPlace(options.contentId, (prev) => {
     const next = { ...prev };
-    for (const tag of buildSuggestionTags(options.suggestion)) {
+    for (const tag of buildSuggestionAdoptionPlan(options.suggestion)) {
       const groupTags = [...(next[tag.group] ?? [])];
       if (!groupTags.some((t) => t.value === tag.value)) {
         groupTags.push({

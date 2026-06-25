@@ -1,6 +1,6 @@
 import { collectFilesForFolder } from "@/lib/file-list-state";
 import { buildFilteredFiles, collectVisibleTags } from "@/lib/file-filtering";
-import { resolveCurrentFileMeta } from "@/lib/tag-domain-state";
+import { buildCurrentFileMeta } from "@/lib/tag-domain-state";
 import type {
   ContentIndexFile,
   FileMeta,
@@ -47,7 +47,7 @@ export function buildAppShellViewModel(options: {
     tags,
     nameSuggestions,
   });
-  const currentTagInspectorMeta = resolveCurrentFileMeta(allFiles, currentFilePath);
+  const currentTagInspectorMeta = buildCurrentFileMeta(allFiles, currentFilePath);
 
   return {
     visibleFiles,

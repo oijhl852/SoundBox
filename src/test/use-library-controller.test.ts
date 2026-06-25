@@ -5,10 +5,10 @@ import {
   buildLibraryClearedState,
   buildLibraryControllerState,
   buildLibraryErrorResult,
-  buildLibraryLoadingState,
   buildSnapshotState,
   cacheLibrarySnapshot,
 } from "@/lib/library-controller-state";
+import { buildLoadingState } from "@/lib/app-orchestration";
 
 
 import type { LibrarySnapshot } from "@/lib/types";
@@ -76,7 +76,7 @@ describe("library-controller-state", () => {
       contentIndex: null,
     });
 
-    expect(buildLibraryLoadingState("正在读取目录结构...")).toEqual({
+    expect(buildLoadingState("正在读取目录结构...")).toEqual({
       status: "indexing",
       message: "正在读取目录结构...",
     });

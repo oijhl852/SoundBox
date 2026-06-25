@@ -176,6 +176,13 @@ export function dragOutFile(path: string, iconPath?: string): void {
 
 }
 
+/** 批量预载磁盘波形缓存，返回 contentId → peaks 映射 */
+export async function batchPreloadWaveforms(contentIds: string[]): Promise<Record<string, number[]>> {
+  return callElectron("batchPreloadWaveforms", (api) => {
+    return requireBridgeMethod(api, "batchPreloadWaveforms")(contentIds);
+  });
+}
+
 
 
 

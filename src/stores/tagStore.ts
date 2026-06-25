@@ -5,12 +5,11 @@ import {
   removeResolvedTag,
 } from "@/lib/tag-domain-effects";
 import {
-  resolveCurrentFileMeta,
-  resolveFileSuggestion,
-  resolveTagContentId,
-  resolveTagPayload,
-  resolveTagRemovalContentId,
-  toggleTagFilterState,
+  buildCurrentFileMeta,
+  buildResolvedTagPayload,
+  buildTagFilterToggle,
+  resolveCurrentContentId,
+  resolveSuggestionForFile,
 } from "@/lib/tag-domain-state";
 import type { TagEntry } from "@/lib/types";
 import { useLibraryStore } from "./libraryStore";
@@ -57,11 +56,11 @@ export const useTagStore = create<TagStore>((set, get) => ({
     if (!currentFile) return;
 
     const allFiles = useLibraryStore.getState().allFiles;
-    const contentId = resolveTagContentId(allFiles, currentFile.path);
+    const contentId = resolveCurrentContentId(allFiles, currentFile.path);
     if (!contentId) return;
 
     const { selectedTagGroup, newTagValue } = get();
-    const payload = resolveTagPayload({
+    const payload = buildResolvedTagPayload({
       groupOverride, valueOverride, selectedTagGroup, newTagValue,
     });
     if (!payload.value) return;
@@ -77,7 +76,7 @@ export const useTagStore = create<TagStore>((set, get) => ({
     if (!currentFile || !tag.group) return;
 
     const allFiles = useLibraryStore.getState().allFiles;
-    const contentId = resolveTagRemovalContentId(allFiles, currentFile.path);
+    const contentId = resolveCurrentContentId(allFiles, currentFile.path);
     if (!contentId) return;
 
     await removeResolvedTag({ contentId, group: tag.group, value: tag.value });
@@ -88,18 +87,18 @@ export const useTagStore = create<TagStore>((set, get) => ({
     if (!currentFile) return;
 
     const nameSuggestions = useLibraryStore.getState().nameSuggestions;
-    const suggestion = resolveFileSuggestion(nameSuggestions, currentFile.path);
+    const suggestion = resolveSuggestionForFile(nameSuggestions, currentFile.path);
     if (!suggestion) return;
 
     const allFiles = useLibraryStore.getState().allFiles;
-    const contentId = resolveTagContentId(allFiles, currentFile.path) ?? "";
+    const contentId = resolveCurrentContentId(allFiles, currentFile.path) ?? "";
 
     await adoptSuggestionTags({ contentId, suggestion });
   },
 
   toggleTagFilter: (tag) => {
     set((prev) => ({
-      tagFilters: toggleTagFilterState(prev.tagFilters, tag),
+      tagFilters: buildTagFilterToggle(prev.tagFilters, tag),
     }));
   },
 
@@ -116,5 +115,5 @@ export const useTagStore = create<TagStore>((set, get) => ({
 export function useCurrentFileMeta() {
   const currentFile = usePlayerStore((s) => s.currentFile);
   const allFiles = useLibraryStore((s) => s.allFiles);
-  return resolveCurrentFileMeta(allFiles, currentFile?.path ?? null);
+  return buildCurrentFileMeta(allFiles, currentFile?.path ?? null);
 }

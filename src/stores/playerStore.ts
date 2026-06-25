@@ -9,6 +9,7 @@ import {
   setPlaybackVolume,
 } from "@/lib/player-state";
 import { createAudioElementBindings, seekOnLoadPct } from "@/lib/audio-element-effects";
+import { formatTime } from "@/lib/utils";
 import {
   buildWaveformReadyState,
   buildWaveformErrorState,
@@ -37,7 +38,6 @@ interface PlayerActions {
   handleProgressClick: (e: React.MouseEvent<HTMLDivElement>) => void;
   resetPlayerState: (nextState?: PlayerState) => void;
   clearAudioElement: () => void;
-  formatTime: (seconds: number) => string;
 }
 
 type PlayerStore = PlayerStateData & PlayerActions;
@@ -187,12 +187,6 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
   clearAudioElement: () => {
     const audio = audioRef.current;
     if (audio) { audio.pause(); audio.removeAttribute("src"); audio.load(); }
-  },
-
-  formatTime: (seconds) => {
-    return isNaN(seconds)
-      ? "00:00"
-      : `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`;
   },
 }));
 

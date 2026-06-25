@@ -36,6 +36,7 @@ const soundbox = {
   getWaveformPeaks: (path: string) => ipcRenderer.invoke("soundbox:get-waveform-peaks", path),
   getSyncStatus: () => ipcRenderer.invoke("soundbox:get-sync-status"),
   getDragDebugState: (): Promise<DragDebugState> => ipcRenderer.invoke("soundbox:get-drag-debug-state"),
+  batchPreloadWaveforms: (contentIds: string[]) => ipcRenderer.invoke("soundbox:batch-preload-waveforms", contentIds),
   dragOutFile,
 };
 

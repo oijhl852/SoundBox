@@ -1,8 +1,7 @@
 # Soundbox - 音频素材管理工具 设计文档
 
-> 版本：v1.2
+> 版本：v1.3
 > 日期：2026-05-20
-> 状态：✅ 标签存储架构升级完成，增量写入 + 原子保护 + NAS 预留
 
 ---
 
@@ -81,54 +80,50 @@
 
 ## 三、功能模块
 
-### 3.1 当前已完成功能
+### 3.1 当前已完成
 
-| 模块 | 功能描述 | 状态 |
-|------|----------|------|
-| **文件浏览器** | 扫描本地目录、文件夹树展示、音频文件列表 | ✅ 完成 |
-| **波形播放器** | 表格视图三列布局（文件名/波形/标签）、点击波形即播、点击定位播放 | ✅ 完成 |
-| **标签管理** | 添加/编辑/删除标签、标签分组、行内标签显示 | ✅ 完成 |
-| **搜索过滤** | 按文件名搜索、按标签过滤、多条件组合筛选 | ✅ 完成 |
-| **索引系统** | 维护 file-index / content-index，支持切库秒开与重复识别 | ✅ 完成 |
-| **标签仓库** | 本地标签仓库，按 contentId 关联 | ✅ 完成 |
-| **去重提示** | 识别内容相同但路径不同的文件 | ✅ 完成 |
-| **波形缓存** | 独立缓存波形数据并复用（LRU，500MB/10000文件上限） | ✅ 完成 |
-| **文件拖出** | 拖拽文件到外部应用（如 PR、剪映） | ✅ 完成 |
-| **素材库管理** | 添加/删除素材库、设置弹窗 | ✅ 完成 |
-| **Zustand 状态管理** | 4 个 Store，组件自行订阅，无 Props drilling | ✅ 完成 |
-| **表格视图** | 三列表格、可拖拽列宽、行高44px | ✅ 完成 |
-| **主题系统** | 4 套配色（极简白/暖白纸墨/暗夜深蓝/赛博紫），设置中切换 | ✅ 完成 |
-| **三级波形预载** | Level 0 紧急/Level 1 可见/Level 2 后台 + 整库预载进度显示 | ✅ 完成 |
-| **Duration 预载** | getAudioMeta IPC（ffprobe）独立获取 duration，先于波形就绪 | ✅ 完成 |
-| **音量控件** | 顶栏音量滑块，随调随用 | ✅ 完成 |
-| **界面重构** | 移除底部播放器控件和标签面板，点击波形直接播放 | ✅ 完成 |
-| **波形缓存稳定性** | 从 contentId 哈希中移除 mtimeMs，解决缓存跨 session 失效 | ✅ v1.1 |
-| **Range 协议支持** | local-audio:// 协议新增 Content-Length + Accept-Ranges + 206 响应，浏览器原生 seek | ✅ v1.1 |
-| **播放架构重构** | selectFile 为唯一控制中心，一次性监听 + audioLoadId 代际隔离，根除竞态 | ✅ v1.1 |
-| **冗余清理** | 移除 resolveWaveformLoad 无用 IPC 调用、loadMetaForBatch 冗余、inspectAudioFile 冗余 | ✅ v1.1 |
-| **浏览器端波形竞速** | browserWaveform() + Promise.race，与 ffmpeg 子进程竞速先到先得 | ✅ v1.1 |
-| **音频格式扩展** | 扫描/播放支持 .ogg .flac .aac（原仅 .wav .mp3 .m4a） | ✅ v1.1 |
-| **代码清理** | 删除 hooks/ 4 个死文件（22KB）、types.js 残留 | ✅ v1.1 |
-| **标签存储架构升级** | 分片存储（contentId → 独立文件）、原子写入（.tmp→rename）、增量更新 store、旧格式自动迁移、custom_tag_path 可配置 | ✅ v1.2 |
+| 模块 | 功能描述 |
+|------|----------|
+| **文件浏览器** | 扫描本地目录、文件夹树展示、音频文件列表 |
+| **波形播放器** | 表格视图三列布局（文件名/波形/标签）、点击波形即播、点击定位播放 |
+| **标签管理** | 添加/编辑/删除标签、标签分组、行内标签显示 |
+| **搜索过滤** | 按文件名搜索、按标签过滤、多条件组合筛选 |
+| **索引系统** | 维护 file-index / content-index，支持切库秒开与重复识别 |
+| **标签仓库** | v1.2 分片存储（contentId → 独立文件），原子写入（.tmp→rename），旧格式自动迁移 |
+| **去重提示** | 识别内容相同但路径不同的文件 |
+| **波形缓存** | 独立缓存波形数据并复用（LRU，500MB/10000文件上限） |
+| **文件拖出** | 拖拽文件到外部应用（如 PR、剪映） |
+| **素材库管理** | 添加/删除素材库、设置弹窗 |
+| **Zustand 状态管理** | 4 个 Store，组件自行订阅，无 Props drilling |
+| **表格视图** | 三列表格、可拖拽列宽、行高44px |
+| **主题系统** | 4 套配色（极简白/暖白纸墨/暗夜深蓝/赛博紫），设置中切换 |
+| **三级波形预载** | Level 0 紧急/Level 1 可见/Level 2 后台 + 整库预载进度显示 |
+| **Duration 预载** | getAudioMeta IPC（ffprobe）独立获取 duration，先于波形就绪 |
+| **音量控件** | 顶栏音量滑块，随调随用 |
+| **Range 协议** | local-audio:// 协议新增 Content-Length + Accept-Ranges + 206 响应，浏览器原生 seek |
+| **播放架构** | selectFile 为唯一控制中心，一次性监听 + audioLoadId 代际隔离，根除竞态 |
+| **浏览器波形竞速** | browserWaveform() + Promise.race，与 ffmpeg 子进程竞速先到先得 |
+| **音频格式** | 支持 .wav .mp3 .m4a .ogg .flac .aac |
+| **代码审阅** | v1.3 全项目审阅，修复 6 项高优问题（详见 AUDIT.md） |
 
 ### 3.2 后续开发优先级
-
-#### P0 - 界面逻辑改进
-
-| 模块 | 功能描述 | 说明 |
-|------|----------|------|
-| **全局搜索** | ✅ 搜索框已提至顶栏，绑定 uiStore.searchQuery | v1.1 已完成 |
-| **批量操作** | 多选文件 + 批量打标签、批量删除标签 | 当前只能单文件操作 |
-| **文件夹树体验** | 展开/折叠状态持久化、目录文件计数显示 | 当前每次刷新树状态丢失 |
 
 #### P0 - 标签系统深化
 
 | 模块 | 功能描述 | 说明 |
 |------|----------|------|
-| **标签视图** | 按标签聚合浏览素材（类似智能播放列表） | 核心需求：查看某个标签下所有素材 |
-| **标签统计** | 每个标签的使用次数、最近使用时间 | 帮助发现最常用的标签 |
-| **标签预设** | 预设常用标签组，快速分类 | 减少重复输入 |
+| **全局搜索** | ✅ 搜索框已提至顶栏，绑定 uiStore.searchQuery | 已完成 |
+| **标签视图** | 按标签聚合浏览素材（类似智能播放列表） | 核心需求 |
 | **标签自动补全** | 输入标签值时自动匹配已有值 | 提升输入效率 |
+| **标签预设** | 预设常用标签组，快速分类 | 减少重复输入 |
+| **标签统计** | 每个标签的使用次数、最近使用时间 | 帮助发现常用标签 |
+
+#### P0 - 界面逻辑改进
+
+| 模块 | 功能描述 |
+|------|----------|
+| **批量操作** | 多选文件 + 批量打标签、批量删除标签 |
+| **文件夹树体验** | 展开/折叠状态持久化、目录文件计数显示 |
 
 #### P1 - 体验优化
 
@@ -172,11 +167,9 @@
 | `tags/content/{bucket}/{contentId}.json` | v1.2 分片标签存储，每个 contentId 独立文件，原子写入 | `custom_tag_path` 或 `%APPDATA%/Soundbox/tags/` |
 | `name-index.json` | 文件名归一化 -> 历史标签建议 | Electron 主进程 userData |
 
-> v1.2 起标签存储从单一 `local-tags.json` 升级为分片目录。旧格式首次启动自动迁移。
-
 ### 标签合并原则
 
-- 单人使用场景，标签直接写入 local-tags.json
+- 单人使用场景，标签直接写入本地仓库
 - 以 contentId 为核心关联标签，不绑定路径
 - 支持基于文件名的智能标签建议（name-index.json）
 
@@ -243,8 +236,8 @@
 │             │ 每个 Store 提供 useXxxStore(selector) 接口       │
 │  ┌──────────▼─────────────────────────────────────────────┐  │
 │  │  子组件（Component）                                  │  │
-│  │  LibrarySidebar  FileListPanel                     │  │
-│  │  SettingsDialog  DropInspectorWindow               │  │
+│  │  LibrarySidebar  FileListPanel  StatusBar             │  │
+│  │  SettingsDialog  DropInspectorWindow                  │  │
 │  │  └─ 内部 use LibraryStore() / usePlayerStore() ...    │  │
 │  │  自行订阅所需状态，不靠父组件传 props                   │  │
 │  └────────────────────────────────────────────────────────┘  │
@@ -275,15 +268,12 @@
 
 | Store | 状态 | 操作 | 被哪些组件订阅 |
 |-------|------|------|---------------|
-| **libraryStore** | libraries, activeLibrary, folderTree, allFiles, tags, contentIndex, nameSuggestions, miniWaveforms, syncStatus, libraryLoadState | selectLibrary, handleAddLibrary/RemoveLibrary, toggleFolder, applySnapshot, initLibraries | LibrarySidebar, FileListPanel, TagInspector, SettingsDialog |
-| **playerStore** | currentFile, isPlaying, isLoading, currentTime, duration, volume, isMuted, fileDurationCache | selectFile, togglePlay, toggleMute, setVolume, seekToPercent, resetPlayerState | FileListPanel, App.tsx |
+| **libraryStore** | libraries, activeLibrary, folderTree, allFiles, tags, contentIndex, nameSuggestions, miniWaveforms, syncStatus, libraryLoadState | selectLibrary, handleAddLibrary/RemoveLibrary, toggleFolder, applySnapshot, initLibraries | LibrarySidebar, FileListPanel, SettingsDialog, StatusBar |
+| **playerStore** | currentFile, isPlaying, isLoading, currentTime, duration, volume, isMuted | selectFile, togglePlay, toggleMute, setVolume, seekToPercent, resetPlayerState | FileListPanel, App.tsx |
 | **(+) audioRef / progressRef** | 模块级 DOM 引用（不在 Store 内） | App.tsx 中绑定 `<audio>` 元素 | — |
 | **(+) usePlayerAudioEffect** | 副作用 Hook（挂载一次） | 音量同步、音频事件绑定、切文件时加载波形 | App.tsx 调用 |
-| **(+) seekOnLoadPct** | 模块级 ref | 波形点击时标记定位，loadedmetadata 时消费 | FileListPanel, playerStore |
 | **tagStore** | tagFilters, showTagEditor, newTagValue, selectedTagGroup | handleAddTag, handleRemoveTag, handleAdoptSuggestion, toggleTagFilter | LibrarySidebar, FileListPanel |
-| **(+) useCurrentFileMeta** | 便捷选择器 | 从 playerStore + libraryStore 计算当前文件元信息 | 当前未使用（标签编辑器已迁移） |
-| **uiStore** | searchQuery, showSettings, showDropInspector, showSidebar, sidebarWidth, isResizingSidebar | setSearchQuery, setShowSettings 等 setter | App.tsx, LibrarySidebar, FileListPanel, SettingsDialog |
-| **(+) useSidebarResizeEffect** | 副作用 Hook | 鼠标拖拽调整侧栏宽度 | App.tsx 调用 |
+| **uiStore** | searchQuery, showSettings, showDropInspector, showSidebar, sidebarWidth, isResizingSidebar, theme | setSearchQuery, setShowSettings 等 setter | App.tsx, LibrarySidebar, FileListPanel, SettingsDialog |
 
 ### 数据流
 
@@ -300,10 +290,8 @@
   → TagInspector 调用 tagStore.handleAddTag()
     → tagStore 读取 playerStore.currentFile（跨 Store 取数据）
     → tagStore 调用 Electron IPC（通过 api.ts）
-    → tagStore 刷新 libraryStore 的快照（通过 applySnapshot）
-    → libraryStore 更新 tags 状态
-    → FileListPanel 自动重渲染（标签筛选变化）
-    → TagInspector 自动重渲染（标签列表变化）
+    → tag-domain-effects.ts 更新 libraryStore.tags（增量写入）
+    → FileListPanel 自动重渲染（标签变化）
 ```
 
 ### App.tsx 的角色
@@ -314,7 +302,7 @@ App.tsx 目前做四件事：
 1. 初始化：调用 libraryStore.initLibraries()（启动时加载素材库）
 2. 挂载副作用 Hook：useThemeEffect()、usePlayerAudioEffect()、useSidebarResizeEffect()
 3. 绑定 <audio> 元素
-4. 底部状态栏：显示波形预载进度
+4. 顶部 Header（Logo、搜索、音量、设置）+ 底部 StatusBar + 弹窗控制
 ```
 
 App.tsx **不传递任何业务数据给子组件**。子组件全部通过 `useXxxStore()` 自行订阅。
@@ -324,10 +312,10 @@ App.tsx **不传递任何业务数据给子组件**。子组件全部通过 `use
 ```
 src/
 ├── main.tsx                    # 入口
-├── App.tsx                     # 顶层协调（70 行，无 Props drilling）
+├── App.tsx                     # 顶层协调（无 Props drilling）
 ├── index.css                   # Tailwind + CSS 变量主题
 │
-├── stores/                     # Zustand Store ★ 核心新增
+├── stores/                     # Zustand Store
 │   ├── libraryStore.ts         # 素材库状态 + 操作
 │   ├── playerStore.ts          # 播放器状态 + 操作
 │   ├── tagStore.ts             # 标签状态 + 操作
@@ -337,10 +325,12 @@ src/
 │   ├── types.ts                # 所有类型定义
 │   ├── api.ts                  # Electron IPC 调用封装
 │   ├── bridge-contract.ts      # Bridge 接口契约
-│   ├── utils.ts                # 通用工具函数
+│   ├── utils.ts                # 通用工具函数（cn, formatTime）
 │   ├── logger.ts               # 日志
 │   ├── app-constants.ts        # 常量（TAG_GROUPS, LIBRARY_TYPES）
 │   ├── file-filtering.ts       # 文件搜索/标签过滤
+│   ├── file-list-state.ts      # 文件列表状态
+│   ├── browser-waveform.ts     # 浏览器端波形生成
 │   ├── tag-domain-state.ts     # 标签领域纯函数
 │   ├── tag-domain-effects.ts   # 标签领域副作用
 │   ├── tag-actions.ts          # 标签原子查询
@@ -366,12 +356,6 @@ src/
 │   ├── library-management-actions.ts # 库管理操作
 │   └── use-mini-waveform-preload.ts  # 迷你波形预加载 Hook
 │
-├── hooks/                      # （保留旧代码，新功能不再使用）
-│   ├── useLibraryDomain.ts     # → 已迁移到 libraryStore
-│   ├── usePlayerDomain.ts      # → 已迁移到 playerStore
-│   ├── useTagDomain.ts         # → 已迁移到 tagStore
-│   └── useAppUiState.ts        # → 已迁移到 uiStore
-│
 ├── components/
 │   ├── ui/                     # shadcn/ui 基础组件
 │   │   ├── button.tsx
@@ -380,6 +364,7 @@ src/
 │   ├── LibrarySidebar.tsx       # 左侧栏（自行订阅 Store）
 │   ├── FileListPanel.tsx        # 文件列表：表格视图 + 波形 + 标签（自行订阅 Store）
 │   ├── SettingsDialog.tsx       # 设置弹窗（标签页结构：外观/素材库/关于）
+│   ├── StatusBar.tsx            # 底部状态栏（独立组件，避免根组件频繁重渲染）
 │   ├── ErrorBoundary.tsx        # 错误边界
 │   └── DropInspectorWindow.tsx  # 拖放调试窗口（可移除）
 │
@@ -393,7 +378,7 @@ src/
 > 本节是 vibe coding 的核心——每个功能的修改都按以下模板操作。
 > 使用时，直接粘贴对应模板 + 你的需求给 AI。
 
-### 快速理解架构（给人类开发者）
+### 快速理解架构
 
 ```
 ┌──────────────────────────────────────────┐
@@ -412,7 +397,7 @@ src/
 - `useLibraryStore()` → 素材库的一切（文件列表、文件夹树、标签数据、索引）
 - `usePlayerStore()` → 播放器的一切（当前文件、播放状态、音量）
 - `useTagStore()` → 标签操作的一切（添加/删除标签、筛选、采纳建议）
-- `useUiStore()` → UI 状态的一切（搜索词、弹窗开关、侧栏宽度）
+- `useUiStore()` → UI 状态的一切（搜索词、弹窗开关、侧栏宽度、主题）
 
 **使用 Store 的两种姿势**：
 ```typescript
@@ -470,26 +455,34 @@ const handleClick = () => {
 
 ## 八、开发计划
 
-### 当前状态：阶段 5 - 标签系统深化与批量操作
+### 当前状态
 
 | 任务 | 优先级 | 状态 |
 |------|--------|------|
-| **引入 Zustand，消除 Props drilling** | P0 | ✅ **已完成** |
-| **界面重构为表格视图** | P0 | ✅ **已完成** |
-| **主题系统（4套配色）** | P0 | ✅ **已完成** |
-| **设置弹窗重新设计（标签页结构）** | P0 | ✅ **已完成** |
-| **三级波形预载 + 整库后台预载** | P0 | ✅ **已完成** |
-| **Duration 预载（getAudioMeta）** | P0 | ✅ **已完成** |
-| **点击波形定位播放** | P0 | ✅ **已完成** |
-| **全局搜索框** | P0 | ✅ **已完成** |
-| **标签视图（按标签聚合浏览）** | P0 | ⏳ 下一项 |
-| **批量打标签（多选 + 批量操作）** | P0 | ⏳ 待开始 |
-| **标签自动补全** | P0 | ⏳ 待开始 |
-| **文件夹树展开状态持久化 + 文件计数** | P0 | ⏳ 待开始 |
-| **标签预设** | P0 | ⏳ 待开始 |
-| **标签统计面板** | P1 | ⏳ 待开始 |
-| **快捷键系统** | P1 | ⏳ 待开始 |
-| **标签导入/导出** | P1 | ⏳ 待开始 |
+| 标签视图（按标签聚合浏览） | P0 | ⏳ 下一项 |
+| 批量打标签（多选 + 批量操作） | P0 | ⏳ 待开始 |
+| 标签自动补全 | P0 | ⏳ 待开始 |
+| 文件夹树展开状态持久化 + 文件计数 | P0 | ⏳ 待开始 |
+| 标签预设 | P0 | ⏳ 待开始 |
+| 标签统计面板 | P1 | ⏳ 待开始 |
+| 快捷键系统 | P1 | ⏳ 待开始 |
+| 标签导入/导出 | P1 | ⏳ 待开始 |
+| 补充 Electron 主进程单元测试 | P1 | ⏳ 待开始 |
+
+### 已完成的里程碑
+
+- [x] 引入 Zustand，创建 4 个 Store，消除 Props drilling
+- [x] 界面重构为表格视图（三列布局、可拖拽列宽）
+- [x] 主题系统（4套配色）
+- [x] 三级波形预载 + 整库后台预载
+- [x] Duration 预载（getAudioMeta）
+- [x] 点击波形定位播放 + Range 协议支持
+- [x] 全局搜索框
+- [x] 波形缓存稳定性修复（contentId 去 mtimeMs）
+- [x] 播放架构重构（selectFile 单一控制点 + audioLoadId 代际隔离）
+- [x] 音频格式扩展至 .ogg .flac .aac
+- [x] 标签存储分片升级 + 原子写入 + 旧格式迁移
+- [x] v1.3 全项目审阅 + 6 项高优问题修复
 
 ### 迭代说明
 
@@ -500,45 +493,36 @@ const handleClick = () => {
 
 ## 九、测试策略
 
+### 规则
+
+> ⚠️ **新代码必须有新测试。** 任何新增或修改的纯函数（`lib/*.ts`），必须在同一次提交中附带对应测试。
+> 修改涉及 `electron/` 目录时，提交前必须运行 `npm run electron:build`。
+
+### 交付前自检（不可跳过）
+
+```
+npm run test              ← 全部测试必须通过
+npm run electron:build    ← 修改了 electron/ 目录时必须执行
+```
+
+### 覆盖范围
+
 | 类型 | 覆盖范围 | 说明 |
 |------|----------|------|
-| **单元测试（纯函数）** | src/lib/*.ts | ✅ 已有 34 个测试文件，新加纯函数必须补测试 |
-| **主进程测试** | electron/*.ts | ❌ 未覆盖，后续补上关键路径 |
-| **组件集成测试** | components/*.tsx | ❌ 未覆盖，后续补上核心组件 |
+| **单元测试（纯函数）** | src/lib/*.ts | ✅ 85 用例，覆盖 26/29 需测试文件 |
+| **主进程测试** | electron/*.ts | ❌ 3 个集成测试，其余未覆盖 |
+| **组件集成测试** | components/*.tsx | ❌ 未覆盖 |
 
 ---
 
-## 十、增量迭代清单
+## 十、相关文档
 
-> 以下列表供每次开发时对照，勾选已完成项。
-
-- [x] 引入 Zustand，创建 libraryStore、playerStore、tagStore、uiStore
-- [x] 将 App.tsx 的 Props drilling 替换为 Store 直接读取（64 props → 2 props）
-- [x] 界面重构为表格视图（三列布局、行高44px、可拖拽列宽）
-- [x] 实现点击波形定位播放（seekOnLoadPct 机制 + Range 协议支持）
-- [x] 设置弹窗重新设计（左侧标签导航：外观/素材库/关于）
-- [x] 主题系统（4套配色、设置中切换）
-- [x] 三级波形预载 + 整库后台预载 + 进度显示
-- [x] Duration 预载（getAudioMeta IPC 读取）
-- [x] 音量控件移到顶栏
-- [x] 全局搜索框提到顶栏
-- [x] 波形缓存稳定性修复（contentId 去 mtimeMs）
-- [x] 播放架构重构（selectFile 单一控制点 + audioLoadId 代际隔离）
-- [x] 冗余 IPC 与文件读取清理
-- [x] 音频格式扩展至 .ogg .flac .aac
-- [x] 删除 hooks/ 死代码 + types.js 残留
-- [x] 标签存储分片升级 + 原子写入 + 增量更新 + 旧格式迁移
-- [ ] 实现标签视图：左侧标签列表 → 右侧该标签下所有文件
-- [ ] 实现多选文件 + 批量打标签
-- [ ] 实现文件夹树展开状态本地持久化
-- [ ] 实现标签输入自动补全
-- [ ] 实现标签预设（预设常用标签组）
-- [ ] 注册全局快捷键（空格、方向键）
-- [ ] 实现标签导出（JSON）和导入
-- [ ] 添加标签统计面板（各标签使用次数）
-- [ ] 补充 Electron 主进程单元测试
-- [ ] 移除 DropInspectorWindow 调试组件（稳定后）
+| 文档 | 用途 |
+|------|------|
+| [CHANGELOG.md](./CHANGELOG.md) | 各版本修改记录（按时间倒序） |
+| [AUDIT.md](./AUDIT.md) | 代码审阅记录与问题追踪 |
+| [README.md](./README.md) | 项目介绍 |
 
 ---
 
-*本文档随项目迭代持续更新。每个版本更新时修改顶部版本号和日期。*
+*本文档随项目迭代持续更新。修改记录请写入 CHANGELOG.md，审阅记录请写入 AUDIT.md。*

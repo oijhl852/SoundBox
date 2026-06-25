@@ -2,7 +2,16 @@ import type { PlayerState } from "@/lib/player-state";
 import { buildEndedPlayerState, buildWaveformErrorState, buildWaveformReadyState } from "@/lib/player-controller-state";
 import { setPlaybackActive, setPlaybackTime } from "@/lib/player-state";
 
-// 仅由 FileListPanel 写入、playerStore.selectFile 消费
+/**
+ * 波形点击定位标记。
+ *
+ * 架构说明：当前采用模块级 ref（而非 React useRef），理由：
+ * ─ 应用为单播放器单窗口架构，不存在多实例竞争。
+ * ─ 它由 FileListPanel（波形点击）写入、playerStore.selectFile（音频加载后）消费，
+ *   两者需要跨组件共享同一引用，模块级 ref 是最轻量的方式。
+ *
+ * ⚠ 若未来引入多窗口 / 多播放器面板，请将此处重构为组件实例内 useRef 或放入 playerStore。
+ */
 export const seekOnLoadPct = { current: null as number | null };
 
 export function createAudioElementBindings(options: {

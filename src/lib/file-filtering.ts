@@ -42,7 +42,7 @@ export function buildFilteredFiles({
 
     const matchesSearch = normalizedQuery
       ? file.name.toLowerCase().includes(normalizedQuery) ||
-        duplicateLabel.includes(searchQuery) ||
+        duplicateLabel.toLowerCase().includes(normalizedQuery) ||
         searchableTags.some((tag) => tag.value.toLowerCase().includes(normalizedQuery))
       : true;
 

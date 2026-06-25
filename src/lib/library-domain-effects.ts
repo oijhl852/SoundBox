@@ -1,5 +1,6 @@
 import { buildLibraryIndex, buildLibrarySnapshot, getSyncStatus, loadSettings } from "@/lib/api";
-import { createLibraryLoadErrorState, scheduleBackgroundIndex } from "@/lib/app-effects";
+import { scheduleBackgroundIndex } from "@/lib/app-effects";
+import { buildLibraryErrorState, buildLoadingState } from "@/lib/app-orchestration";
 import { shouldApplyLibraryResult, shouldTriggerBackgroundIndex } from "@/lib/library-actions";
 import { createLibrarySelectionResult } from "@/lib/library-management-actions";
 import { deriveBootstrapState } from "@/lib/app-shell-actions";
@@ -8,7 +9,6 @@ import {
   applyLibraryMutationResult,
   buildLibraryControllerState,
   buildLibraryErrorResult,
-  buildLibraryLoadingState,
 } from "@/lib/library-controller-state";
 
 import type { LibraryLoadState } from "@/lib/types";
@@ -44,7 +44,7 @@ export async function resolveLibrarySelection(options: {
     return;
   }
 
-  onLoadingState(buildLibraryLoadingState("正在读取目录结构..."));
+  onLoadingState(buildLoadingState("正在读取目录结构..."));
 
   try {
     const previewSnapshot = await buildLibrarySnapshot(path);
@@ -62,7 +62,7 @@ export async function resolveLibrarySelection(options: {
           applySnapshot(fullSnapshot);
         },
         onError: (indexErr) => {
-          onLoadingState(createLibraryLoadErrorState(indexErr));
+          onLoadingState(buildLibraryErrorState(indexErr));
         },
       });
     } else {

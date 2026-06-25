@@ -54,51 +54,6 @@ export function buildTagFilterToggle(current: Set<string>, tag: string) {
   return next;
 }
 
-export function resolveTagPayload(options: {
-  groupOverride?: string;
-  valueOverride?: string;
-  selectedTagGroup: string;
-  newTagValue: string;
-}) {
-  return buildResolvedTagPayload(
-    options.groupOverride,
-    options.valueOverride,
-    options.selectedTagGroup,
-    options.newTagValue
-  );
-}
-
-export function resolveTagContentId(files: FileMeta[], filePath: string | null) {
-  return resolveCurrentContentId(files, filePath);
-}
-
-export function resolveTagRemovalId(files: FileMeta[], filePath: string | null) {
-  return resolveTagRemovalContentId(files, filePath);
-}
-
-export function resolveFileSuggestion(
-  suggestions: Record<string, NameTagSuggestion>,
-  filePath: string | null
-) {
-  return resolveSuggestionForFile(suggestions, filePath);
-}
-
-export function buildSuggestionTags(suggestion: { tags: { group: string; value: string }[] }) {
-  return buildSuggestionAdoptionPlan(suggestion);
-}
-
-export function resetTagEditorValue() {
-  return applyTagEditorReset().newTagValue;
-}
-
-export function toggleTagFilterState(current: Set<string>, tag: string) {
-  return buildTagFilterToggle(current, tag);
-}
-
-export function resolveCurrentFileMeta(files: FileMeta[], filePath: string | null) {
-  return buildCurrentFileMeta(files, filePath);
-}
-
 export function canRemoveTag(tag: TagEntry) {
   return Boolean(tag.group);
 }

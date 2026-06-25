@@ -22,7 +22,7 @@ interface UiState {
 interface UiActions {
   setSearchQuery: (value: string) => void;
   setShowSettings: (value: boolean) => void;
-  setShowDropInspector: (value: boolean | ((prev: boolean) => boolean)) => void;
+  setShowDropInspector: (value: boolean) => void;
   setShowSidebar: (value: boolean) => void;
   setSidebarWidth: (value: number) => void;
   setIsResizingSidebar: (value: boolean) => void;
@@ -68,10 +68,7 @@ export const useUiStore = create<UiStore>((set) => ({
   // Actions
   setSearchQuery: (value) => set({ searchQuery: value }),
   setShowSettings: (value) => set({ showSettings: value }),
-  setShowDropInspector: (value) =>
-    set((state) => ({
-      showDropInspector: typeof value === "function" ? value(state.showDropInspector) : value,
-    })),
+  setShowDropInspector: (value) => set({ showDropInspector: value }),
   setShowSidebar: (value) => set({ showSidebar: value }),
   setSidebarWidth: (value) => set({ sidebarWidth: value }),
   setIsResizingSidebar: (value) => set({ isResizingSidebar: value }),
